@@ -73,6 +73,20 @@
 			"style": {
 				"navigationBarTitleText": "食谱详情"
 			}
+		},
+		{
+			"path": "pages/profile/edit",
+			"style": {
+				"navigationBarTitleText": "编辑资料",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/profile/password",
+			"style": {
+				"navigationBarTitleText": "修改密码",
+				"navigationStyle": "custom"
+			}
 		}
 	],
 	"globalStyle": {

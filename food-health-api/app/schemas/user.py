@@ -76,6 +76,22 @@ class HistoryListResponse(BaseModel):
     items: List[HistoryItemResponse]
 
 
+class ChangePasswordRequest(BaseModel):
+    """修改密码请求"""
+    old_password: str = Field(..., min_length=1, description="旧密码")
+    new_password: str = Field(..., min_length=6, max_length=100, description="新密码")
+
+
+class AvatarUploadRequest(BaseModel):
+    """头像上传请求"""
+    image_base64: str = Field(..., description="Base64 编码的图片数据")
+
+
+class AvatarUploadResponse(BaseModel):
+    """头像上传响应"""
+    avatar_url: str = Field(..., description="头像 URL")
+
+
 class SaveHistoryRequest(BaseModel):
     """保存历史请求"""
     recognized_food: str = Field(..., description="识别的食物名称")

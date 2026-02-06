@@ -141,7 +141,8 @@
         
         <view class="food-items">
           <view class="food-item" v-for="item in getMealItems(type.key)" :key="item.id">
-            <image :src="item.image_url || '/static/default_food.png'" class="food-img" mode="aspectFill"></image>
+            <image v-if="item.image_url" :src="getFoodImageUrl(item.image_url)" class="food-img" mode="aspectFill"></image>
+            <view v-else class="food-img-placeholder">🍽️</view>
             <view class="food-info">
               <text class="name">{{ item.food_name }}</text>
               <text class="desc">{{ item.unit_weight }}克 · {{ item.calories }}千卡</text>
@@ -255,6 +256,11 @@ export default {
     this.fetchData();
   },
   methods: {
+    getFoodImageUrl(url) {
+      if (!url) return '';
+      if (url.startsWith('http')) return url;
+      return API_BASE_URL + url;
+    },
     async fetchData() {
       this.loading = true;
       try {
@@ -746,6 +752,18 @@ export default {
   border-radius: 6px;
   background-color: #eee;
   margin-right: 10px;
+}
+
+.food-img-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background-color: #f5f5f5;
+  margin-right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
 }
 
 .food-info {

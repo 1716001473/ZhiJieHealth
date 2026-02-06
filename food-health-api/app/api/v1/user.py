@@ -3,7 +3,7 @@
 用户 API 路由
 """
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, File, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
@@ -12,7 +12,8 @@ from app.schemas.response import APIResponse
 from app.schemas.user import (
     UserRegisterRequest, UserLoginRequest, UserLoginResponse,
     UserResponse, UserUpdateRequest,
-    HistoryListResponse, HistoryItemResponse, SaveHistoryRequest
+    HistoryListResponse, HistoryItemResponse, SaveHistoryRequest,
+    ChangePasswordRequest, AvatarUploadRequest, AvatarUploadResponse
 )
 from app.config import get_settings
 
@@ -215,3 +216,143 @@ async def delete_history(
         raise HTTPException(status_code=404, detail="记录不存在")
     
     return APIResponse.success(message="删除成功")
+
+
+# ========== 头像上传 ==========
+
+@router.post("/user/avatar", response_model=APIResponse[AvatarUploadResponse])
+async def upload_avatar(
+    request: AvatarUploadRequest,
+    user_id: int = Depends(require_login),
+    db: Session = Depends(get_db),
+):
+    """
+    上传头像 (Base64 方式)
+
+    接收 Base64 编码的图片，保存后返回头像 URL
+    """
+    import base64
+    import uuid
+    from pathlib import Path
+
+    # 解析 Base64 图片
+    try:
+        # 支持 data:image/xxx;base64, 前缀
+        image_data = request.image_base64
+        if "," in image_data:
+            image_data = image_data.split(",")[1]
+
+        image_bytes = base64.b64decode(image_data)
+    except Exception:
+        raise HTTPException(status_code=400, detail="图片格式错误")
+
+    # 限制图片大小 (2MB)
+    if len(image_bytes) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="图片大小不能超过 2MB")
+
+    # 创建存储目录
+    avatar_dir = Path("static/avatars")
+    avatar_dir.mkdir(parents=True, exist_ok=True)
+
+    # 生成文件名
+    filename = f"{user_id}_{uuid.uuid4().hex[:8]}.jpg"
+    filepath = avatar_dir / filename
+
+    # 保存图片
+    with open(filepath, "wb") as f:
+        f.write(image_bytes)
+
+    # 生成 URL
+    avatar_url = f"/static/avatars/{filename}"
+
+    # 更新用户头像
+    user_service = UserService(db)
+    user_service.update_user(user_id, avatar_url=avatar_url)
+
+    return APIResponse.success(
+        data=AvatarUploadResponse(avatar_url=avatar_url),
+        message="头像上传成功"
+    )
+
+
+@router.post("/user/avatar/upload", response_model=APIResponse[AvatarUploadResponse])
+async def upload_avatar_file(
+    file: UploadFile = File(...),
+    user_id: int = Depends(require_login),
+    db: Session = Depends(get_db),
+):
+    """
+    上传头像 (文件方式)
+
+    接收文件上传，保存后返回头像 URL
+    适用于 uni.uploadFile 等文件上传方式
+    """
+    import uuid
+    from pathlib import Path
+
+    # 读取文件内容
+    try:
+        image_bytes = await file.read()
+    except Exception:
+        raise HTTPException(status_code=400, detail="文件读取失败")
+
+    # 限制图片大小 (2MB)
+    if len(image_bytes) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="图片大小不能超过 2MB")
+
+    # 创建存储目录
+    avatar_dir = Path("static/avatars")
+    avatar_dir.mkdir(parents=True, exist_ok=True)
+
+    # 生成文件名
+    ext = file.filename.split(".")[-1] if file.filename and "." in file.filename else "jpg"
+    filename = f"{user_id}_{uuid.uuid4().hex[:8]}.{ext}"
+    filepath = avatar_dir / filename
+
+    # 保存图片
+    with open(filepath, "wb") as f:
+        f.write(image_bytes)
+
+    # 生成 URL
+    avatar_url = f"/static/avatars/{filename}"
+
+    # 更新用户头像
+    user_service = UserService(db)
+    user_service.update_user(user_id, avatar_url=avatar_url)
+
+    return APIResponse.success(
+        data=AvatarUploadResponse(avatar_url=avatar_url),
+        message="头像上传成功"
+    )
+
+
+# ========== 修改密码 ==========
+
+@router.put("/user/password", response_model=APIResponse)
+async def change_password(
+    request: ChangePasswordRequest,
+    user_id: int = Depends(require_login),
+    db: Session = Depends(get_db),
+):
+    """
+    修改密码
+
+    需要验证旧密码后才能设置新密码
+    """
+    from app.services.user_service import verify_password, hash_password
+
+    user_service = UserService(db)
+    user = user_service.get_user_by_id(user_id)
+
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    # 验证旧密码
+    if not verify_password(request.old_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="旧密码错误")
+
+    # 更新密码
+    user.password_hash = hash_password(request.new_password)
+    db.commit()
+
+    return APIResponse.success(message="密码修改成功")

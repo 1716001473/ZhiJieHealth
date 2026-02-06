@@ -3,8 +3,10 @@
 智能食物识别健康助手 - FastAPI 应用入口
 """
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.database.connection import create_tables, init_database
@@ -96,6 +98,12 @@ app.include_router(
     prefix="/api/v1",
     tags=["推荐食谱"]
 )
+
+
+# 挂载静态文件目录（用于头像等资源访问）
+static_dir = Path("static")
+static_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/", tags=["健康检查"])

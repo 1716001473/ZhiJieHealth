@@ -1,16 +1,27 @@
 <template>
   <view class="container">
     <view class="header">
-      <view class="avatar-section">
-        <text class="avatar">{{ user?.nickname?.[0] || '👤' }}</text>
+      <view class="avatar-section" @click="user ? goEditProfile() : goLogin()">
+        <!-- 头像显示 -->
+        <image
+          v-if="user?.avatar_url"
+          class="avatar-img"
+          :src="getAvatarUrl(user.avatar_url)"
+          mode="aspectFill"
+        />
+        <text v-else class="avatar">{{ user?.nickname?.[0] || '👤' }}</text>
+
         <view class="user-info" v-if="user">
           <text class="nickname">{{ user.nickname || user.username }}</text>
           <text class="username">@{{ user.username }}</text>
         </view>
         <view class="user-info" v-else>
           <text class="nickname">未登录</text>
-          <text class="login-tip" @click="goLogin">点击登录</text>
+          <text class="login-tip">点击登录</text>
         </view>
+
+        <!-- 编辑入口箭头 -->
+        <text class="edit-arrow" v-if="user">›</text>
       </view>
     </view>
 
@@ -144,8 +155,18 @@ const loadTodayReport = async () => {
   }
 }
 
+const getAvatarUrl = (url: string) => {
+  if (!url) return ''
+  if (url.startsWith('http')) return url
+  return API_BASE_URL + url
+}
+
 const goLogin = () => {
   uni.navigateTo({ url: '/pages/login/index' })
+}
+
+const goEditProfile = () => {
+  uni.navigateTo({ url: '/pages/profile/edit' })
 }
 
 const goHistory = () => {
@@ -217,6 +238,14 @@ const handleLogout = () => {
   align-items: center;
 }
 
+.avatar-img {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  margin-right: 30rpx;
+  background: rgba(255, 255, 255, 0.3);
+}
+
 .avatar {
   width: 120rpx;
   height: 120rpx;
@@ -230,6 +259,12 @@ const handleLogout = () => {
   margin-right: 30rpx;
   text-align: center;
   line-height: 120rpx;
+}
+
+.edit-arrow {
+  font-size: 40rpx;
+  color: rgba(255, 255, 255, 0.8);
+  margin-left: 10rpx;
 }
 
 .user-info {

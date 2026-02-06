@@ -10,6 +10,10 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         // rewrite: (path) => path.replace(/^\/api/, ''), // 后端本身就是 /api 开头，不需要 rewrite
+      },
+      '/static': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
       }
     }
   }
