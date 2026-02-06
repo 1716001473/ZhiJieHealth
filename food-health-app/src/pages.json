@@ -1,0 +1,84 @@
+{
+	"easycom": {
+		"autoscan": true,
+		"custom": {
+			"^qiun-(.*)": "ch-ucharts/components/qiun-$1/qiun-$1.vue"
+		}
+	},
+	"pages": [
+		{
+			"path": "pages/index/index",
+			"style": {
+				"navigationBarTitleText": "食物识别",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/result/index",
+			"style": {
+				"navigationBarTitleText": "识别结果"
+			}
+		},
+		{
+			"path": "pages/history/index",
+			"style": {
+				"navigationBarTitleText": "识别历史"
+			}
+		},
+		{
+			"path": "pages/login/index",
+			"style": {
+				"navigationBarTitleText": "登录"
+			}
+		},
+		{
+			"path": "pages/profile/index",
+			"style": {
+				"navigationBarTitleText": "我的"
+			}
+		},
+		{
+			"path": "pages/health/index",
+			"style": {
+				"navigationBarTitleText": "健康档案"
+			}
+		},
+		{
+			"path": "pages/record/index",
+			"style": {
+				"navigationBarTitleText": "饮食记录",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/record/add",
+			"style": {
+				"navigationBarTitleText": "添加饮食"
+			}
+		},
+		{
+			"path": "pages/profile/settings",
+			"style": {
+				"navigationBarTitleText": "个人设置"
+			}
+		},
+		{
+			"path": "pages/plan/index",
+			"style": {
+				"navigationBarTitleText": "推荐食谱"
+			}
+		},
+		{
+			"path": "pages/plan/detail",
+			"style": {
+				"navigationBarTitleText": "食谱详情"
+			}
+		}
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "white",
+		"navigationBarTitleText": "智能食物识别",
+		"navigationBarBackgroundColor": "#4CAF50",
+		"backgroundColor": "#F5F5F5"
+	}
+}
