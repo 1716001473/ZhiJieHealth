@@ -27,6 +27,7 @@ class DataSourceEnum(str, Enum):
     DEEPSEEK_AI = "deepseek_ai"  # 来自 AI 估算
     BAIDU_AI = "baidu_ai"        # 来自百度热量估算
     USER_CUSTOM = "user_custom"  # 用户自定义食物
+    OPENFOODFACTS = "openfoodfacts"  # 来自 Open Food Facts 数据库
 
 
 class MealRecord(Base):
@@ -39,6 +40,7 @@ class MealRecord(Base):
 
     # 快照字段，记录当时的食物名称与每 100g 的营养数据
     food_name = Column(String(100), nullable=False, comment="食物名称快照")
+    image_url = Column(String(500), nullable=True, comment="食物图片URL快照")
     per_100g_calories = Column(Float, nullable=False, comment="每 100g 热量（kcal）快照")
     per_100g_protein = Column(Float, nullable=False, comment="每 100g 蛋白质（g）快照")
     per_100g_fat = Column(Float, nullable=False, comment="每 100g 脂肪（g）快照")

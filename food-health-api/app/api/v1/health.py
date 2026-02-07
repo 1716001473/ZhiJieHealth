@@ -143,9 +143,9 @@ async def get_weight_history(
     user_id: int = Depends(get_current_user)
 ):
     """获取体重历史趋势"""
-    # 未登录用户返回空数据
+    # TODO: 暂时使用硬编码用户ID，待鉴权完善后移除
     if not user_id:
-        return APIResponse.success([])
+        user_id = 1
 
     start_date = date.today() - timedelta(days=days)
     records = db.query(WeightRecord).filter(
@@ -167,9 +167,9 @@ async def get_nutrition_history(
     user_id: int = Depends(get_current_user)
 ):
     """获取营养摄入趋势"""
-    # 未登录用户返回空数据
+    # TODO: 暂时使用硬编码用户ID，待鉴权完善后移除
     if not user_id:
-        return APIResponse.success([])
+        user_id = 1
 
     start_date = date.today() - timedelta(days=days)
 

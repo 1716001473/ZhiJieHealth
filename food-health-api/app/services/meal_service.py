@@ -64,18 +64,19 @@ class MealService:
             user_id=user_id,
             food_id=data.food_id,
             food_name=data.food_name,
+            image_url=data.image_url,
             meal_date=data.meal_date,
             meal_type=data.meal_type,
             unit_weight=data.unit_weight,
             note=data.note,
             data_source=data.data_source,
-            
+
             # 快照
             per_100g_calories=per_100g["calories"],
             per_100g_protein=per_100g["protein"],
             per_100g_fat=per_100g["fat"],
             per_100g_carb=per_100g["carb"],
-            
+
             # 计算值
             calories=actual["calories"],
             protein=actual["protein"],

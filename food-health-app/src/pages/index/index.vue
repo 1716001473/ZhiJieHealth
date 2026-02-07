@@ -41,12 +41,45 @@
         </view>
       </view>
 
-      <!-- 快速测试（开发用） -->
-      <view class="test-section">
-        <button class="test-btn" @click="testRecognize">
-          🧪 快速测试（模拟数据）
-        </button>
+      <!-- 今日饮食摘要 -->
+      <view class="diet-card" @click="goRecord">
+        <view class="diet-header">
+          <text class="diet-title">🍽️ 今日饮食</text>
+          <text class="diet-link">详情 ></text>
+        </view>
+        <template v-if="dietReport.total.calories > 0">
+          <view class="calorie-row">
+            <text class="calorie-label">已摄入</text>
+            <text class="calorie-value">{{ dietReport.total.calories.toFixed(0) }}</text>
+            <text class="calorie-unit">/ {{ dietReport.recommended.calories.toFixed(0) }} kcal</text>
+          </view>
+          <view class="calorie-bar">
+            <view class="calorie-fill" :style="{ width: caloriePercent + '%', background: caloriePercent > 100 ? '#F44336' : '#4CAF50' }"></view>
+          </view>
+          <view class="macro-row">
+            <view class="macro-item">
+              <text class="macro-label">碳水</text>
+              <view class="macro-bar"><view class="macro-fill" :style="{ width: carbPercent + '%', background: '#4CAF50' }"></view></view>
+              <text class="macro-val">{{ dietReport.total.carb.toFixed(0) }}g</text>
+            </view>
+            <view class="macro-item">
+              <text class="macro-label">蛋白质</text>
+              <view class="macro-bar"><view class="macro-fill" :style="{ width: proteinPercent + '%', background: '#FF9800' }"></view></view>
+              <text class="macro-val">{{ dietReport.total.protein.toFixed(0) }}g</text>
+            </view>
+            <view class="macro-item">
+              <text class="macro-label">脂肪</text>
+              <view class="macro-bar"><view class="macro-fill" :style="{ width: fatPercent + '%', background: '#F44336' }"></view></view>
+              <text class="macro-val">{{ dietReport.total.fat.toFixed(0) }}g</text>
+            </view>
+          </view>
+        </template>
+        <view v-else class="diet-empty">
+          <text class="diet-empty-icon">🥗</text>
+          <text class="diet-empty-text">今天还没有饮食记录，去记录一下吧～</text>
+        </view>
       </view>
+
     </view>
 
     <!-- 加载提示 -->
@@ -80,14 +113,41 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { API_BASE_URL } from '@/config.js'
 import { buildChooseImageOptions } from '@/utils/imageSelect.js'
+import { request } from '@/utils/http'
+import reportUtils from '@/utils/report.js'
 
 // API 地址配置
 const API_BASE = API_BASE_URL
 
 const loading = ref(false)
+
+// 今日饮食数据
+const dietReport = ref(reportUtils.normalizeReport(null))
+
+const caloriePercent = computed(() => reportUtils.safePercent(dietReport.value.total.calories, dietReport.value.recommended.calories))
+const carbPercent = computed(() => reportUtils.safePercent(dietReport.value.total.carb, dietReport.value.recommended.carb))
+const proteinPercent = computed(() => reportUtils.safePercent(dietReport.value.total.protein, dietReport.value.recommended.protein))
+const fatPercent = computed(() => reportUtils.safePercent(dietReport.value.total.fat, dietReport.value.recommended.fat))
+
+// 获取今日饮食摘要
+const fetchDailyReport = async () => {
+  try {
+    const today = new Date().toISOString().slice(0, 10)
+    const res = await request({
+      url: `${API_BASE}/api/v1/meal/daily-report?date=${today}`,
+      method: 'GET',
+      silentAuth: true
+    })
+    if (res.statusCode === 200 && (res.data as any)?.code === 0) {
+      dietReport.value = reportUtils.normalizeReport((res.data as any).data)
+    }
+  } catch (e) {
+    // 静默处理
+  }
+}
 
 // 拍照
 const takePhoto = () => {
@@ -158,38 +218,6 @@ const uploadAndRecognize = (filePath: string) => {
   })
 }
 
-// 快速测试（使用模拟数据）
-const testRecognize = () => {
-  loading.value = true
-  
-  uni.request({
-    url: `${API_BASE}/api/v1/recognize/test`,
-    method: 'GET',
-    success: (res: any) => {
-      loading.value = false
-      if (res.data.code === 0 && res.data.data) {
-        uni.navigateTo({
-          url: `/pages/result/index?data=${encodeURIComponent(JSON.stringify(res.data.data))}`
-        })
-      } else {
-        uni.showToast({
-          title: '测试失败',
-          icon: 'none'
-        })
-      }
-    },
-    fail: (err) => {
-      loading.value = false
-      console.error('请求失败', err)
-      uni.showToast({
-        title: '请确保后端服务已启动\nhttp://127.0.0.1:8000',
-        icon: 'none',
-        duration: 3000
-      })
-    }
-  })
-}
-
 // 导航方法
 const goHistory = () => {
   uni.navigateTo({ url: '/pages/history/index' })
@@ -202,6 +230,10 @@ const goRecord = () => {
 const goProfile = () => {
   uni.navigateTo({ url: '/pages/profile/index' })
 }
+
+onMounted(() => {
+  fetchDailyReport()
+})
 </script>
 
 <style lang="scss">
@@ -236,6 +268,7 @@ const goProfile = () => {
 
 .main-area {
   padding: 40rpx;
+  padding-bottom: 160rpx;
   margin-top: -30rpx;
 }
 
@@ -317,18 +350,120 @@ const goProfile = () => {
   color: #999;
 }
 
-.test-section {
-  margin-top: 40rpx;
+/* 今日饮食摘要卡片 */
+.diet-card {
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 28rpx;
+  box-shadow: 0 6rpx 24rpx rgba(0, 0, 0, 0.06);
 }
 
-.test-btn {
-  width: 100%;
-  padding: 28rpx;
-  background: #fff;
-  border: 2rpx dashed #4CAF50;
-  border-radius: 16rpx;
-  font-size: 28rpx;
+.diet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+
+.diet-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.diet-link {
+  font-size: 24rpx;
   color: #4CAF50;
+}
+
+.calorie-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+  margin-bottom: 16rpx;
+}
+
+.calorie-label {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.calorie-value {
+  font-size: 48rpx;
+  font-weight: 700;
+  color: #333;
+}
+
+.calorie-unit {
+  font-size: 22rpx;
+  color: #999;
+}
+
+.calorie-bar {
+  height: 16rpx;
+  background: #F0F0F0;
+  border-radius: 8rpx;
+  overflow: hidden;
+  margin-bottom: 28rpx;
+}
+
+.calorie-fill {
+  height: 100%;
+  border-radius: 8rpx;
+  transition: width 0.5s ease;
+}
+
+.macro-row {
+  display: flex;
+  gap: 20rpx;
+}
+
+.macro-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.macro-label {
+  font-size: 22rpx;
+  color: #999;
+}
+
+.macro-bar {
+  height: 8rpx;
+  background: #F0F0F0;
+  border-radius: 4rpx;
+  overflow: hidden;
+}
+
+.macro-fill {
+  height: 100%;
+  border-radius: 4rpx;
+  transition: width 0.5s ease;
+}
+
+.macro-val {
+  font-size: 22rpx;
+  color: #666;
+  font-weight: 500;
+}
+
+.diet-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40rpx 0 20rpx;
+  gap: 16rpx;
+}
+
+.diet-empty-icon {
+  font-size: 64rpx;
+}
+
+.diet-empty-text {
+  font-size: 24rpx;
+  color: #999;
 }
 
 .loading-mask {

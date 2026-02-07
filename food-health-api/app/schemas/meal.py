@@ -19,13 +19,14 @@ class MealRecordCreate(MealRecordBase):
     """创建饮食记录请求"""
     food_id: Optional[int] = Field(None, description="关联食物ID，自定义食物可为空")
     food_name: str = Field(..., min_length=1, max_length=100, description="食物名称")
-    
+    image_url: Optional[str] = Field(None, max_length=500, description="食物图片URL")
+
     # 可选：如果前端直接传营养数据（如自定义食物），否则后端根据 food_id 查
     per_100g_calories: Optional[float] = Field(None, ge=0)
     per_100g_protein: Optional[float] = Field(None, ge=0)
     per_100g_fat: Optional[float] = Field(None, ge=0)
     per_100g_carb: Optional[float] = Field(None, ge=0)
-    
+
     data_source: DataSourceEnum = Field(default=DataSourceEnum.DATABASE, description="数据来源")
 
 
@@ -48,7 +49,8 @@ class MealRecordResponse(MealRecordBase):
     user_id: int
     food_id: Optional[int]
     food_name: str
-    
+    image_url: Optional[str] = None
+
     # 营养快照
     per_100g_calories: float
     per_100g_protein: float

@@ -128,10 +128,29 @@
       </view>
 
       <view v-else-if="activeTab === 'diet'" class="card">
-        <text class="card-title">营养摄入</text>
-        <health-chart 
-          title="近7日热量摄入" 
-          unit="kcal" 
+        <view class="card-header">
+          <text class="card-title">营养摄入</text>
+          <view class="time-filter">
+            <text
+              class="filter-btn"
+              :class="{ active: nutritionDays === 7 }"
+              @click="changeNutritionDays(7)"
+            >7天</text>
+            <text
+              class="filter-btn"
+              :class="{ active: nutritionDays === 14 }"
+              @click="changeNutritionDays(14)"
+            >14天</text>
+            <text
+              class="filter-btn"
+              :class="{ active: nutritionDays === 30 }"
+              @click="changeNutritionDays(30)"
+            >30天</text>
+          </view>
+        </view>
+        <health-chart
+          :title="`近${nutritionDays}日热量摄入`"
+          unit="kcal"
           type="bar"
           :data="nutritionHistory"
           color="#FF9800"
@@ -167,6 +186,7 @@ const tabs = [
 
 const activeTab = ref('core')
 const weightDays = ref(7) // 默认显示7天
+const nutritionDays = ref(7) // 营养数据默认显示7天
 const profile = ref<any>(uni.getStorageSync('healthProfile') || {})
 const progress = ref(healthProfile.calcProfileCompletion(profile.value))
 const healthFocus = ref(healthProfile.getHealthFocusMessage(profile.value))
@@ -307,6 +327,12 @@ const changeWeightDays = (days: number) => {
   fetchWeightData()
 }
 
+// 切换营养数据显示天数
+const changeNutritionDays = (days: number) => {
+  nutritionDays.value = days
+  fetchNutritionData()
+}
+
 // 数据采样函数 - 等间隔选取关键数据点
 const sampleData = (data: any[], maxPoints: number = 8) => {
   if (data.length <= maxPoints) return data
@@ -337,14 +363,10 @@ const fetchWeightData = async () => {
   } catch (e) {}
 }
 
-// 获取图表数据
-const fetchChartsData = async () => {
-  // 1. 获取体重历史
-  await fetchWeightData()
-
-  // 2. 获取营养历史
+// 获取营养数据
+const fetchNutritionData = async () => {
   try {
-    const res = await request({ url: `${API_BASE_URL}/api/v1/health/nutrition/history?days=7`, method: 'GET' })
+    const res = await request({ url: `${API_BASE_URL}/api/v1/health/nutrition/history?days=${nutritionDays.value}`, method: 'GET' })
     if (res.data?.code === 0) {
       nutritionHistory.value = res.data.data.map((item: any) => ({
         label: item.date.slice(5),
@@ -353,6 +375,15 @@ const fetchChartsData = async () => {
       }))
     }
   } catch (e) {}
+}
+
+// 获取图表数据
+const fetchChartsData = async () => {
+  // 1. 获取体重历史
+  await fetchWeightData()
+
+  // 2. 获取营养历史
+  await fetchNutritionData()
 }
 
 onMounted(() => {

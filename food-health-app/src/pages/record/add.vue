@@ -215,7 +215,8 @@ export default {
         meal_date: this.targetDate,
         meal_type: item.meal_type || this.currentMealType,
         food_name: item.name,
-        unit_weight: parseFloat(weight)
+        unit_weight: parseFloat(weight),
+        image_url: item.image_url || null
       };
       const dataSource = item.data_source || 'database';
       if (item.is_temp) {
@@ -271,6 +272,7 @@ export default {
           nutrition: this.selectedFood.nutrition,
           data_source: this.selectedFood.data_source,
           is_temp: this.selectedFood.is_temp,
+          image_url: this.selectedFood.image_url,
           weight: this.weight,
           meal_type: this.currentMealType
         });
@@ -304,10 +306,12 @@ export default {
             uni.navigateBack();
           }, 1000);
         } else {
-          uni.showToast({ title: res.data.message || '批量添加失败', icon: 'none' });
+          const errorMsg = this.parseErrorMessage(res.data, res.statusCode);
+          uni.showToast({ title: errorMsg, icon: 'none', duration: 3000 });
         }
       } catch (e) {
-        uni.showToast({ title: '请求出错', icon: 'none' });
+        console.error('批量添加饮食记录失败:', e);
+        uni.showToast({ title: '网络请求失败，请检查网络连接', icon: 'none' });
       } finally {
         uni.hideLoading();
       }
@@ -317,7 +321,7 @@ export default {
         uni.showToast({ title: '请输入有效重量', icon: 'none' });
         return;
       }
-      
+
       uni.showLoading({ title: '提交中' });
       try {
         const res = await uni.request({
@@ -325,7 +329,7 @@ export default {
           method: 'POST',
           data: this.buildMealPayload(this.selectedFood, this.weight)
         });
-        
+
         if (res.data.code === 0) {
           uni.showToast({ title: '添加成功' });
           const type = this.currentMealType;
@@ -335,13 +339,43 @@ export default {
             uni.navigateBack();
           }, 1000);
         } else {
-          uni.showToast({ title: res.data.message || '添加失败', icon: 'none' });
+          // 解析详细错误信息
+          const errorMsg = this.parseErrorMessage(res.data, res.statusCode);
+          uni.showToast({ title: errorMsg, icon: 'none', duration: 3000 });
         }
       } catch (e) {
-        uni.showToast({ title: '请求出错', icon: 'none' });
+        console.error('添加饮食记录失败:', e);
+        uni.showToast({ title: '网络请求失败，请检查网络连接', icon: 'none' });
       } finally {
         uni.hideLoading();
       }
+    },
+    parseErrorMessage(data, statusCode) {
+      // 处理 422 验证错误
+      if (statusCode === 422) {
+        if (data.detail && Array.isArray(data.detail)) {
+          // Pydantic 验证错误格式
+          const firstError = data.detail[0];
+          const field = firstError.loc ? firstError.loc[firstError.loc.length - 1] : '未知字段';
+          const fieldNames = {
+            'meal_date': '日期',
+            'meal_type': '餐次',
+            'unit_weight': '重量',
+            'food_name': '食物名称',
+            'data_source': '数据来源',
+            'per_100g_calories': '热量数据'
+          };
+          const fieldName = fieldNames[field] || field;
+          return `${fieldName}格式错误`;
+        }
+        return '数据格式错误，请检查输入';
+      }
+
+      // 处理其他错误
+      if (data.message) return data.message;
+      if (data.detail) return typeof data.detail === 'string' ? data.detail : '请求处理失败';
+
+      return '添加失败，请稍后重试';
     }
   }
 }

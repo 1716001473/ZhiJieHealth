@@ -335,7 +335,7 @@ export default {
       return reportUtils.safePercent(val, max);
     },
     getMealItems(type) {
-      return this.report.records.filter(r => r.meal_type === type);
+      return this.report.records.filter(r => r.meal_type?.toLowerCase() === type.toLowerCase());
     },
     getMealCalories(type) {
       const items = this.getMealItems(type);
@@ -375,7 +375,7 @@ export default {
     startEditRecord(item) {
       this.editingRecord = item;
       this.editWeight = String(item.unit_weight || 0);
-      this.editMealType = item.meal_type || 'breakfast';
+      this.editMealType = (item.meal_type || 'breakfast').toLowerCase();
     },
     cancelEditRecord() {
       this.editingRecord = null;
