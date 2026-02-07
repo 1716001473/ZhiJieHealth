@@ -267,6 +267,9 @@ export default {
         const res = await uni.request({
           url: `${API_BASE_URL}/api/v1/meal/daily-report`,
           method: 'GET',
+          header: {
+            'Authorization': `Bearer ${uni.getStorageSync('token')}`
+          },
           data: {
             date: this.currentDateStr
           }
@@ -326,10 +329,11 @@ export default {
       const key = uni.getStorageSync('lastMealType');
       if (!key) return;
       uni.removeStorageSync('lastMealType');
-      this.$nextTick(() => {
+      // 等待 loading=false 后 DOM 完全渲染再滚动
+      setTimeout(() => {
         const selector = `#meal-${key}`;
         uni.pageScrollTo({ selector, duration: 300 });
-      });
+      }, 350);
     },
     getPercent(val, max) {
       return reportUtils.safePercent(val, max);
@@ -360,7 +364,10 @@ export default {
              try {
                 const res = await uni.request({
                   url: `${API_BASE_URL}/api/v1/meal/record/${id}`,
-                  method: 'DELETE'
+                  method: 'DELETE',
+                  header: {
+                    'Authorization': `Bearer ${uni.getStorageSync('token')}`
+                  }
                 });
                 if(res.data.code === 0) {
                   this.fetchData();
@@ -391,6 +398,10 @@ export default {
         const res = await uni.request({
           url: `${API_BASE_URL}/api/v1/meal/record/${this.editingRecord.id}`,
           method: 'PUT',
+          header: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${uni.getStorageSync('token')}`
+          },
           data: {
             unit_weight: weight,
             meal_type: this.editMealType

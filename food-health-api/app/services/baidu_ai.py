@@ -96,22 +96,33 @@ class BaiduAIService:
             category_label="植物识别",
         )
 
-        merged_results = dish_results + fruit_results + plant_results
+        # 过滤掉百度API返回的否定性结果（如"非果蔬食材"、"非植物"等）
+        NEGATIVE_NAMES = {"非果蔬食材", "非植物", "非食材", "非菜品", "未知"}
+
+        filtered_dish = [r for r in dish_results if r.name not in NEGATIVE_NAMES]
+        filtered_fruit = [r for r in fruit_results if r.name not in NEGATIVE_NAMES]
+        filtered_plant = [r for r in plant_results if r.name not in NEGATIVE_NAMES]
+
+        merged_results = filtered_dish + filtered_fruit + filtered_plant
         if merged_results:
             sorted_results = sorted(merged_results, key=lambda x: x.confidence, reverse=True)
-            
+
             # 策略优化：如果果蔬/食材识别有高置信度结果(>0.8)，优先推荐。
             # 解决菜品识别模型容易对生鲜食材产生高置信度误判的问题（如将西红柿误判为非菜）
-            top_fruit = next((r for r in fruit_results if r.confidence > 0.8), None)
-            
+            top_fruit = next((r for r in filtered_fruit if r.confidence > 0.8), None)
+
             if top_fruit and sorted_results[0] != top_fruit:
                 # 将该高置信度果蔬结果提升到首位
                 if top_fruit in sorted_results:
                     sorted_results.remove(top_fruit)
                 sorted_results.insert(0, top_fruit)
-                print(f"⚠️ 策略调整：优先展示导致信度果蔬结果 [{top_fruit.name}] (confidence: {top_fruit.confidence})")
-            
+                print(f"⚠️ 策略调整：优先展示高置信度果蔬结果 [{top_fruit.name}] (confidence: {top_fruit.confidence})")
+
             return sorted_results
+
+        # 如果过滤后没有有效结果，回退到未过滤的菜品识别结果
+        if dish_results:
+            return sorted(dish_results, key=lambda x: x.confidence, reverse=True)
 
         print("⚠️ 未识别到菜品/果蔬/植物，使用模拟数据")
         return self._get_mock_results()

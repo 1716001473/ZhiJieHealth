@@ -1,6 +1,86 @@
 # 📝 Changelog - 智能食物识别健康助手
 
 
+## 2026-02-07 食物数据库大规模扩充 + FatSecret API 集成 + 搜索优化 🥬📊🔍
+
+### 功能概述
+
+将本地食物数据库从 87 条扩充到 **1852 条**，覆盖中国常见食物，集成 FatSecret API 作为在线搜索补充，并优化搜索排序逻辑，大幅提升食物搜索体验。
+
+### 核心改进
+
+**1. 《中国食物成分表》数据批量导入**
+- **数据源**：Sanotsu/china-food-composition-data（GitHub 开源），基于《中国食物成分表标准版(第6版)》
+- **导入量**：**1765 条**中国常见食物，涵盖 16 个分类
+- **分类覆盖**：蔬菜 319 | 肉类 272 | 水产 246 | 乳制品 236 | 主食 182 | 水果 179 | 豆制品 78 | 菌菇 69 | 零食 61 | 蛋类 30 等
+- **数据处理**：自动清理名称后缀（代表值/均值）、处理特殊值（Tr→0、—→None）、跨文件去重
+
+**2. foodwake 图片匹配**
+- **数据源**：LuckyHookin/foodwake（GitHub，1144 条有图片记录）
+- **匹配结果**：**862 条**食物获得图片 URL（覆盖率 46.5%）
+- **匹配策略**：精确匹配优先，模糊匹配（包含关系）补充
+
+**3. FatSecret API 集成（在线搜索补充）**
+- **认证方式**：OAuth 2.0 Client Credentials
+- **搜索参数**：`region=CN, language=zh`，获取中文结果
+- **营养解析**：从 `food_description` 字符串提取热量/蛋白质/脂肪/碳水数据
+- **搜索优先级**：本地 DB → FatSecret → Open Food Facts
+
+**4. 搜索排序优化**
+- **优化前**：无序返回，精确匹配和模糊匹配混在一起
+- **优化后**：精确匹配(优先级1) > 前缀匹配(2) > 别名匹配(3) > 包含匹配(4)
+- **实现方式**：SQLAlchemy `case` 表达式排序
+
+**5. Bug 修复：image_url 未传递**
+- `get_food_response()` 构建 `FoodResponse` 时缺少 `image_url=food.image_url`，导致有图片的食物也不显示图片
+
+**6. Bug 修复：百度 AI "非果蔬食材" 误判**
+- **问题**：多模型识别时，果蔬 API 返回"非果蔬食材"（置信度 0.95）被优先展示
+- **修复**：添加 `NEGATIVE_NAMES` 过滤集，排除"非果蔬食材"、"非植物"等否定性结果
+
+**7. Bug 修复：饮食记录 401 未授权**
+- **问题**：`record/index.vue` 中 3 个 API 请求缺少 Authorization 头
+- **修复**：为 `fetchData`、`deleteItem`、`confirmEditRecord` 添加 Bearer Token
+
+**8. Bug 修复：add.vue 编码损坏**
+- **问题**：Vue 文件中 19 处中文字符被替换为 `�?`（GBK 编码损坏）
+- **修复**：逐一还原所有损坏的中文文本
+
+### 技术实现
+
+**后端改动：**
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `scripts/import_china_food_data.py` | 新增 | Sanotsu 数据批量导入脚本（跨文件去重、特殊值处理） |
+| `scripts/import_foodwake_images.py` | 新增 | foodwake 图片匹配脚本（JSONL 解析、精确+模糊匹配） |
+| `app/services/fatsecret_service.py` | 新增 | FatSecret API 服务（OAuth 2.0、中文搜索、营养解析） |
+| `app/services/food_service.py` | 修改 | 搜索排序优化 + image_url bug 修复 |
+| `app/services/baidu_ai.py` | 修改 | 添加否定性结果过滤（NEGATIVE_NAMES） |
+| `app/api/v1/food.py` | 修改 | 搜索路由集成 FatSecret（本地→FatSecret→OFF 三级搜索） |
+| `app/config.py` | 修改 | 新增 `fatsecret_client_id` / `fatsecret_client_secret` 配置 |
+| `.env` | 修改 | 新增 FatSecret API 凭据 |
+
+**前端改动：**
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `pages/record/add.vue` | 修复 | 19 处中文编码损坏还原 |
+| `pages/record/index.vue` | 修复 | 3 个 API 请求添加 Authorization 头 |
+
+### 数据统计
+
+| 指标 | 优化前 | 优化后 |
+|------|--------|--------|
+| 本地食物数据量 | 87 条 | **1852 条** (21倍) |
+| 搜索"牛奶"结果 | 1 条 | **76 条** |
+| 搜索"鸡蛋"结果 | 1 条 | **15 条** |
+| 有图片的食物 | 0% | **46.5%** (862条) |
+| 在线补充 | OFF（中文差） | FatSecret（中文好）+ OFF |
+| 搜索排序 | 无序 | 精确 > 前缀 > 别名 > 包含 |
+
+---
+
 ## 2026-02-06 个人资料编辑与头像上传 📸✏️
 
 ### 功能概述

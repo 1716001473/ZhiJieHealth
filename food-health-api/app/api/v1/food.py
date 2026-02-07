@@ -10,9 +10,10 @@ from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.services.food_service import FoodService
 from app.services.openfoodfacts_service import off_service
+from app.services.fatsecret_service import fatsecret_service
 from app.schemas.response import APIResponse
 from app.schemas.food import (
-    FoodResponse, CookingMethodResponse, PortionResponse
+    FoodResponse, NutritionInfo, CookingMethodResponse, PortionResponse
 )
 
 logger = logging.getLogger(__name__)
@@ -60,13 +61,64 @@ async def search_foods(
     """
     food_service = FoodService(db)
 
-    # 1. 先从本地数据库搜索
+    # 1. 先从本地数据库搜索（Food 表 + FoodTemp 表）
     local_foods = food_service.search_foods(keyword, limit)
+    local_names = {f.name.lower() for f in local_foods}
 
-    # 2. 如果本地结果不足且启用 OFF，从 Open Food Facts 补充
+    # 2. 本地结果不足时，从 FatSecret 补充（中文结果质量好）
+    if len(local_foods) < limit and fatsecret_service.is_configured:
+        remaining = limit - len(local_foods)
+        try:
+            fs_results = await fatsecret_service.search_foods(keyword, remaining + 5)
+
+            for fs_item in fs_results:
+                if len(local_foods) >= limit:
+                    break
+                if fs_item["name"].lower() in local_names:
+                    continue
+
+                # 缓存到临时表
+                nutrition = {
+                    "calories": fs_item["calories"],
+                    "protein": fs_item["protein"],
+                    "fat": fs_item["fat"],
+                    "carb": fs_item["carbohydrate"],
+                }
+                food_service.upsert_temp_food(
+                    name=fs_item["name"],
+                    nutrition=nutrition,
+                    source="fatsecret"
+                )
+
+                fs_response = FoodResponse(
+                    id=0,
+                    name=fs_item["name"],
+                    alias=fs_item.get("brand"),
+                    category="FatSecret",
+                    health_rating="适量",
+                    health_tips=None,
+                    nutrition=NutritionInfo(
+                        calories=fs_item["calories"],
+                        protein=fs_item["protein"],
+                        fat=fs_item["fat"],
+                        carbohydrate=fs_item["carbohydrate"],
+                    ),
+                    serving_desc=None,
+                    serving_weight=100,
+                    contraindications=[],
+                    data_source="fatsecret",
+                    is_temp=True,
+                    image_url=None,
+                )
+                local_foods.append(fs_response)
+                local_names.add(fs_item["name"].lower())
+
+        except Exception as e:
+            logger.warning(f"FatSecret 搜索失败: {e}")
+
+    # 3. 仍不足时，从 Open Food Facts 补充
     if include_off and len(local_foods) < limit:
         remaining = limit - len(local_foods)
-        local_names = {f.name.lower() for f in local_foods}
 
         try:
             off_results = await off_service.search_foods(keyword, remaining + 5)
@@ -75,7 +127,6 @@ async def search_foods(
                 if len(local_foods) >= limit:
                     break
 
-                # 跳过已存在的食物
                 if off_item["name"].lower() in local_names:
                     continue
 
@@ -92,8 +143,6 @@ async def search_foods(
                     source="openfoodfacts"
                 )
 
-                # 构建响应
-                from app.schemas.food import NutritionInfo
                 off_response = FoodResponse(
                     id=0,
                     name=off_item["name"],

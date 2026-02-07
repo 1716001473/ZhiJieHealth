@@ -62,6 +62,7 @@ class FoodService:
             contraindications=contraindications,
             data_source="database",
             is_temp=False,
+            image_url=food.image_url,
         )
 
     def _build_temp_response(self, temp: FoodTemp) -> FoodResponse:
@@ -195,10 +196,23 @@ class FoodService:
         return self.db.query(FoodPortion).filter(FoodPortion.portion_name == name).first()
     
     def search_foods(self, keyword: str, limit: int = 10) -> List[FoodResponse]:
-        """搜索食物"""
+        """搜索食物 - 优化版：精确匹配优先"""
+        from sqlalchemy import case, or_
+
+        # 构建优先级排序：精确匹配 > 前缀匹配 > 别名匹配 > 包含匹配
+        priority = case(
+            (Food.name == keyword, 1),
+            (Food.name.startswith(keyword), 2),
+            (Food.alias.contains(keyword), 3),
+            else_=4
+        )
+
         foods = self.db.query(Food).filter(
-            (Food.name.contains(keyword)) | (Food.alias.contains(keyword))
-        ).limit(limit).all()
+            or_(
+                Food.name.contains(keyword),
+                Food.alias.contains(keyword)
+            )
+        ).order_by(priority).limit(limit).all()
 
         results: List[FoodResponse] = []
         seen_names = set()
@@ -208,14 +222,17 @@ class FoodService:
                 results.append(response)
                 seen_names.add(response.name)
 
-        temp_foods = self.db.query(FoodTemp).filter(
-            FoodTemp.name.contains(keyword)
-        ).limit(limit).all()
+        # FoodTemp 补充
+        if len(results) < limit:
+            remaining = limit - len(results)
+            temp_foods = self.db.query(FoodTemp).filter(
+                FoodTemp.name.contains(keyword)
+            ).limit(remaining).all()
 
-        for temp in temp_foods:
-            if temp.name in seen_names:
-                continue
-            results.append(self._build_temp_response(temp))
-            seen_names.add(temp.name)
+            for temp in temp_foods:
+                if temp.name in seen_names:
+                    continue
+                results.append(self._build_temp_response(temp))
+                seen_names.add(temp.name)
 
         return results[:limit]

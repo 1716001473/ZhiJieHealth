@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # CORS 允许的来源（逗号分隔，如 "http://localhost:5173,https://example.com"）
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # FatSecret API 配置
+    fatsecret_client_id: str = ""
+    fatsecret_client_secret: str = ""
+
     # 游客模式（开发期默认开启）
     allow_guest_history: bool = True
     
@@ -51,6 +55,11 @@ class Settings(BaseSettings):
     def deepseek_configured(self) -> bool:
         """检查DeepSeek是否已配置"""
         return bool(self.deepseek_api_key)
+
+    @property
+    def fatsecret_configured(self) -> bool:
+        """检查FatSecret是否已配置"""
+        return bool(self.fatsecret_client_id and self.fatsecret_client_secret)
 
 
 @lru_cache()
