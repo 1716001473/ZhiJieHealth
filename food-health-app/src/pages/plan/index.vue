@@ -360,23 +360,17 @@ const showFeedbackDialog = (plan: any) => {
           // 尝试从标签中提取食材相关信息
           const foodTags = extractFoodTags(planTags, planName)
           foodTags.forEach(tag => addDislikedTag(tag))
-          if (foodTags.length > 0) {
-            console.log('已记录不喜欢的食材:', foodTags)
-          }
           break
 
         case 1: // 做法太难
           addDislikedTag('复杂做法')
-          console.log('已记录：不喜欢复杂做法')
           break
 
         case 2: // 热量太高
           addDislikedTag('高热量')
-          console.log('已记录：不喜欢高热量')
           break
 
         case 3: // 随意隐藏
-          console.log('食谱已隐藏')
           break
       }
     }

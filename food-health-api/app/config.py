@@ -13,21 +13,24 @@ class Settings(BaseSettings):
     # 应用基础配置
     app_name: str = "智能食物识别健康助手"
     api_version: str = "v1"
-    debug: bool = True
-    
+    debug: bool = False
+
     # 数据库配置
     database_url: str = "sqlite:///./food_health.db"
-    
+
     # 百度AI配置
     baidu_api_key: str = ""
     baidu_secret_key: str = ""
-    
+
     # DeepSeek AI 配置
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
 
-    # 安全配置
-    secret_key: str = "food_health_secret_key_2026"
+    # 安全配置（必须通过环境变量或 .env 文件设置）
+    secret_key: str = ""
+
+    # CORS 允许的来源（逗号分隔，如 "http://localhost:5173,https://example.com"）
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # 游客模式（开发期默认开启）
     allow_guest_history: bool = True

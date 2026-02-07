@@ -2,6 +2,7 @@
 """
 智能食物识别健康助手 - FastAPI 应用入口
 """
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
@@ -11,6 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.database.connection import create_tables, init_database
 from app.api.v1 import recognition, food, calories, user, meal, health, plan
+
+logger = logging.getLogger(__name__)
 
 
 settings = get_settings()
@@ -23,25 +26,25 @@ async def lifespan(app: FastAPI):
     启动时：创建数据库表，初始化数据
     """
     # 启动时执行
-    print("🚀 正在启动服务...")
+    logger.info("正在启动服务...")
     create_tables()
     init_database()
-    print("✅ 数据库初始化完成")
+    logger.info("数据库初始化完成")
     
     if settings.baidu_ai_configured:
-        print("✅ 百度AI已配置")
+        logger.info("百度AI已配置")
     else:
-        print("⚠️ 百度AI未配置，识别功能将使用模拟数据")
+        logger.warning("百度AI未配置，识别功能将使用模拟数据")
     
     if settings.deepseek_configured:
-        print("✅ DeepSeek AI已配置")
+        logger.info("DeepSeek AI已配置")
     else:
-        print("⚠️ DeepSeek未配置，本地无数据时将仅显示百度热量")
+        logger.warning("DeepSeek未配置，本地无数据时将仅显示百度热量")
     
     yield
     
     # 关闭时执行
-    print("👋 服务已关闭")
+    logger.info("服务已关闭")
 
 
 # 创建 FastAPI 应用实例
@@ -52,10 +55,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 配置 CORS（允许小程序和前端跨域访问）
+# 配置 CORS（从配置文件读取允许的来源）
+cors_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应限制具体域名
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

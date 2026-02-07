@@ -298,8 +298,6 @@ const saveProfile = async () => {
 
       // 检查保存结果
       if (weightRes.statusCode === 200 && weightRes.data?.code === 0) {
-        console.log('✅ 体重记录已保存到数据库')
-
         // 刷新图表数据（如果在健康数据tab）
         if (activeTab.value === 'health') {
           await fetchChartsData()

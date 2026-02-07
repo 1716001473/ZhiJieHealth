@@ -284,32 +284,31 @@ const saveToHistory = () => {
     silentAuth: true
   }).then((res: any) => {
     if (res.statusCode === 401) return
-    console.log('✅ 历史记录已保存', res.data)
   }).catch((err) => {
-    console.log('⚠️ 保存历史记录失败', err)
+    console.warn('保存历史记录失败', err)
   })
 }
 
-const calculateCalories = () => {
+const calculateCalories = async () => {
   if (!resultData.value?.top_result?.name) return
-  
-  uni.request({
-    url: `${API_BASE}/api/v1/calculate/calories`,
-    method: 'POST',
-    header: {
-      'Content-Type': 'application/json'
-    },
-    data: {
-      food_name: resultData.value.top_result.name,
-      portion: selectedPortion.value,
-      cooking_method: selectedCooking.value
-    },
-    success: (res: any) => {
-      if (res.data.code === 0) {
-        calorieResult.value = res.data.data
-      }
+
+  try {
+    const res = await request({
+      url: `${API_BASE}/api/v1/calculate/calories`,
+      method: 'POST',
+      data: {
+        food_name: resultData.value.top_result.name,
+        portion: selectedPortion.value,
+        cooking_method: selectedCooking.value
+      },
+      silentAuth: true
+    })
+    if ((res.data as any)?.code === 0) {
+      calorieResult.value = (res.data as any).data
     }
-  })
+  } catch (e) {
+    // 静默处理
+  }
 }
 
 // 餐具估算计算

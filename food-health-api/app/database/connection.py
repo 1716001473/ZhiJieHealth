@@ -2,10 +2,14 @@
 """
 数据库连接配置
 """
+import logging
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -56,6 +60,6 @@ def init_database():
         db.commit()
     except Exception as e:
         db.rollback()
-        print(f"初始化数据失败: {e}")
+        logger.error(f"初始化数据失败: {e}")
     finally:
         db.close()

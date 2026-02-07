@@ -157,8 +157,7 @@ const takePhoto = () => {
     success: (res) => {
       uploadAndRecognize(res.tempFilePaths[0])
     },
-    fail: (err) => {
-      console.log('拍照取消', err)
+    fail: () => {
     }
   })
 }
@@ -171,8 +170,7 @@ const chooseFromAlbum = () => {
     success: (res) => {
       uploadAndRecognize(res.tempFilePaths[0])
     },
-    fail: (err) => {
-      console.log('选择取消', err)
+    fail: () => {
     }
   })
 }

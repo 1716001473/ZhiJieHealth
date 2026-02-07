@@ -2,6 +2,8 @@
 """
 食物识别 API 路由
 """
+import logging
+
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -13,6 +15,8 @@ from app.schemas.response import APIResponse
 from app.schemas.recognition import RecognizeResponse, RecognitionTopResult
 from app.schemas.food import NutritionInfo, ContraindicationInfo
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 settings = get_settings()
@@ -40,7 +44,7 @@ async def recognize_food(
     
     # 读取图片内容
     image_bytes = await image.read()
-    print(f"📷 收到图片: {image.filename}, 大小: {len(image_bytes)} bytes, 类型: {image.content_type}")
+    logger.info(f"收到图片: {image.filename}, 大小: {len(image_bytes)} bytes, 类型: {image.content_type}")
     
     # 限制图片大小（4MB）
     if len(image_bytes) > 4 * 1024 * 1024:
@@ -48,13 +52,13 @@ async def recognize_food(
     
     # 转换为 base64
     image_base64 = encode_image_to_base64(image_bytes)
-    print(f"📷 Base64 编码后大小: {len(image_base64)} 字符")
+    logger.info(f"Base64 编码后大小: {len(image_base64)} 字符")
     
     # 调用百度AI识别
     try:
         results = await baidu_ai_service.recognize_dish(image_base64)
     except Exception as e:
-        print(f"❌ 识别异常: {type(e).__name__}: {str(e)}")
+        logger.warning(f"识别异常: {type(e).__name__}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"识别失败: {str(e)}")
     
     if not results:
@@ -164,47 +168,5 @@ async def recognize_food(
             top_result=top_result_detail,
             message=message,
             is_mock=is_mock,
-        )
-    )
-
-
-@router.get("/recognize/test", response_model=APIResponse[RecognizeResponse])
-async def test_recognize(db: Session = Depends(get_db)):
-    """
-    测试识别接口（使用模拟数据）
-    
-    无需上传图片，直接返回模拟的识别结果，用于前端开发调试
-    """
-    # 使用模拟数据
-    results = baidu_ai_service._get_mock_results()
-    
-    # 获取第一个结果的详细信息
-    food_service = FoodService(db)
-    food_detail = food_service.get_food_response(results[0].name)
-    
-    if food_detail:
-        top_result_detail = RecognitionTopResult(
-            name=results[0].name,
-            confidence=results[0].confidence,
-            category=food_detail.category,
-            nutrition=food_detail.nutrition,
-            health_rating=food_detail.health_rating,
-            health_tips=food_detail.health_tips,
-            contraindications=food_detail.contraindications,
-            found_in_database=True,
-        )
-    else:
-        top_result_detail = RecognitionTopResult(
-            name=results[0].name,
-            confidence=results[0].confidence,
-            found_in_database=False,
-        )
-    
-    return APIResponse.success(
-        data=RecognizeResponse(
-            results=results,
-            top_result=top_result_detail,
-            message="这是测试数据，仅供开发调试使用",
-            is_mock=True,
         )
     )

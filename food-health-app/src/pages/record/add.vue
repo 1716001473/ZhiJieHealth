@@ -1,6 +1,6 @@
 <template>
   <view class="container">
-    <!-- 搜索栏 -->
+    <!-- 搜索�?-->
     <view class="search-bar">
       <input 
         class="search-input" 
@@ -13,7 +13,7 @@
 
     <view class="batch-panel" v-if="selectedItems.length">
       <view class="batch-header">
-        <text class="batch-title">待添加清单</text>
+        <text class="batch-title">待添加清�?/text>
         <text class="batch-clear" @click="clearBatch">清空</text>
       </view>
       <view class="batch-meal-types">
@@ -57,7 +57,7 @@
           :src="item.image_url"
           mode="aspectFill"
         />
-        <view v-else class="food-image-placeholder">🍽️</view>
+        <view v-else class="food-image-placeholder">🍽�?/view>
 
         <view class="left">
           <view class="name-row">
@@ -70,7 +70,7 @@
       </view>
       
       <view v-if="hasSearched && searchResults.length === 0" class="empty">
-        <text>未找到相关食物，试试其他关键词</text>
+        <text>未找到相关食物，试试其他关键�?/text>
       </view>
     </scroll-view>
     
@@ -97,7 +97,7 @@
         </view>
         
         <view class="form-item">
-          <text class="label">重量 (克)</text>
+          <text class="label">重量 (�?</text>
           <input class="weight-input" type="number" v-model="weight" placeholder="100" />
         </view>
 
@@ -156,8 +156,8 @@ export default {
       ],
       dishSizes: [
         { name: '一小碗', weight: 150 },
-        { name: '一碗', weight: 250 },
-        { name: '一盘', weight: 300 },
+        { name: '一�?, weight: 250 },
+        { name: '一�?, weight: 300 },
         { name: '一大盘', weight: 450 }
       ]
     }
@@ -194,9 +194,9 @@ export default {
       const source = item?.data_source || 'database';
       if (source === 'deepseek_ai') return 'AI估算';
       if (source === 'baidu_ai') return '百度热量';
-      if (source === 'user_custom') return '自定义';
-      if (source === 'openfoodfacts') return 'OFF数据库';
-      return '数据库';
+      if (source === 'user_custom') return '自定�?;
+      if (source === 'openfoodfacts') return 'OFF数据�?;
+      return '数据�?;
     },
     getSourceClass(item) {
       const source = item?.data_source || 'database';
@@ -238,7 +238,7 @@ export default {
     async doSearch() {
       if (!this.keyword) return;
       
-      uni.showLoading({ title: '搜索中...' });
+      uni.showLoading({ title: '搜索�?..' });
       try {
         const res = await uni.request({
           url: `${API_BASE_URL}/api/v1/food?keyword=${this.keyword}`,
@@ -263,7 +263,7 @@ export default {
       const exists = this.selectedItems.find(item => item.key === key);
       if (exists) {
         exists.weight = this.weight;
-        uni.showToast({ title: '已更新清单', icon: 'none' });
+        uni.showToast({ title: '已更新清�?, icon: 'none' });
       } else {
         this.selectedItems.push({
           key,
@@ -276,7 +276,7 @@ export default {
           weight: this.weight,
           meal_type: this.currentMealType
         });
-        uni.showToast({ title: '已加入清单', icon: 'success' });
+        uni.showToast({ title: '已加入清�?, icon: 'success' });
       }
       this.selectedFood = null;
     },
@@ -289,11 +289,15 @@ export default {
     async confirmBatchAdd() {
       if (!this.selectedItems.length) return;
       const items = this.selectedItems.map(item => this.buildMealPayload(item, item.weight));
-      uni.showLoading({ title: '批量提交中' });
+      uni.showLoading({ title: '批量提交�? });
       try {
         const res = await uni.request({
           url: `${API_BASE_URL}/api/v1/meal/records/batch`,
           method: 'POST',
+          header: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${uni.getStorageSync('token')}`
+          },
           data: { items }
         });
         if (res.data.code === 0) {
@@ -311,22 +315,26 @@ export default {
         }
       } catch (e) {
         console.error('批量添加饮食记录失败:', e);
-        uni.showToast({ title: '网络请求失败，请检查网络连接', icon: 'none' });
+        uni.showToast({ title: '网络请求失败，请检查网络连�?, icon: 'none' });
       } finally {
         uni.hideLoading();
       }
     },
     async confirmAdd() {
       if (!this.weight || this.weight <= 0) {
-        uni.showToast({ title: '请输入有效重量', icon: 'none' });
+        uni.showToast({ title: '请输入有效重�?, icon: 'none' });
         return;
       }
 
-      uni.showLoading({ title: '提交中' });
+      uni.showLoading({ title: '提交�? });
       try {
         const res = await uni.request({
           url: `${API_BASE_URL}/api/v1/meal/record`,
           method: 'POST',
+          header: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${uni.getStorageSync('token')}`
+          },
           data: this.buildMealPayload(this.selectedFood, this.weight)
         });
 
@@ -345,7 +353,7 @@ export default {
         }
       } catch (e) {
         console.error('添加饮食记录失败:', e);
-        uni.showToast({ title: '网络请求失败，请检查网络连接', icon: 'none' });
+        uni.showToast({ title: '网络请求失败，请检查网络连�?, icon: 'none' });
       } finally {
         uni.hideLoading();
       }
@@ -368,7 +376,7 @@ export default {
           const fieldName = fieldNames[field] || field;
           return `${fieldName}格式错误`;
         }
-        return '数据格式错误，请检查输入';
+        return '数据格式错误，请检查输�?;
       }
 
       // 处理其他错误

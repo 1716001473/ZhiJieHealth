@@ -11,13 +11,13 @@ from app.database.connection import get_db
 from app.services.meal_service import MealService
 from app.schemas.response import APIResponse
 from app.schemas.meal import (
-    MealRecordCreate, 
-    MealRecordResponse, 
-    MealRecordBatchCreate, 
+    MealRecordCreate,
+    MealRecordResponse,
+    MealRecordBatchCreate,
     MealRecordUpdate,
     DailyNutritionReport
 )
-# 暂时模拟当前用户ID
+from app.api.v1.user import require_login
 
 router = APIRouter()
 
@@ -26,12 +26,9 @@ router = APIRouter()
 async def create_meal_record(
     request: MealRecordCreate,
     db: Session = Depends(get_db),
-    # user_id: int = Depends(get_current_user_id) # 鉴权暂未完全打通，先用模拟
+    user_id: int = Depends(require_login),
 ):
     """添加单条饮食记录"""
-    # TODO: 替换为真实用户ID获取
-    user_id = 1 
-    
     service = MealService(db)
     try:
         record = service.create_meal_record(user_id, request)
@@ -44,9 +41,9 @@ async def create_meal_record(
 async def batch_create_meal_records(
     request: MealRecordBatchCreate,
     db: Session = Depends(get_db),
+    user_id: int = Depends(require_login),
 ):
     """批量添加饮食记录"""
-    user_id = 1
     service = MealService(db)
     results = []
     try:
@@ -63,15 +60,15 @@ async def update_meal_record(
     record_id: int,
     request: MealRecordUpdate,
     db: Session = Depends(get_db),
+    user_id: int = Depends(require_login),
 ):
     """更新饮食记录"""
-    user_id = 1
     service = MealService(db)
     record = service.update_meal_record(record_id, user_id, request)
-    
+
     if not record:
         raise HTTPException(status_code=404, detail="记录不存在或无权修改")
-        
+
     return APIResponse.success(data=record)
 
 
@@ -79,15 +76,15 @@ async def update_meal_record(
 async def delete_meal_record(
     record_id: int,
     db: Session = Depends(get_db),
+    user_id: int = Depends(require_login),
 ):
     """删除饮食记录"""
-    user_id = 1
     service = MealService(db)
     success = service.delete_meal_record(record_id, user_id)
-    
+
     if not success:
         raise HTTPException(status_code=404, detail="记录不存在或无权删除")
-        
+
     return APIResponse.success(data=True)
 
 
@@ -95,9 +92,9 @@ async def delete_meal_record(
 async def get_daily_report(
     date: date = Query(..., description="查询日期"),
     db: Session = Depends(get_db),
+    user_id: int = Depends(require_login),
 ):
     """获取每日营养分析报告"""
-    user_id = 1
     service = MealService(db)
     report = service.get_daily_report(user_id, date)
     return APIResponse.success(data=report)

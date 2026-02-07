@@ -10,7 +10,7 @@ from app.services.deepseek_service import deepseek_service
 from app.database.connection import get_db
 from app.models.weight_record import WeightRecord
 from app.models.user_meal import MealRecord
-from app.api.v1.user import get_current_user
+from app.api.v1.user import get_current_user, require_login
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from fastapi import Depends
@@ -140,13 +140,9 @@ async def add_weight_record(
 async def get_weight_history(
     days: int = 30,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user)
+    user_id: int = Depends(require_login)
 ):
     """获取体重历史趋势"""
-    # TODO: 暂时使用硬编码用户ID，待鉴权完善后移除
-    if not user_id:
-        user_id = 1
-
     start_date = date.today() - timedelta(days=days)
     records = db.query(WeightRecord).filter(
         WeightRecord.user_id == user_id,
@@ -164,13 +160,9 @@ async def get_weight_history(
 async def get_nutrition_history(
     days: int = 7,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user)
+    user_id: int = Depends(require_login)
 ):
     """获取营养摄入趋势"""
-    # TODO: 暂时使用硬编码用户ID，待鉴权完善后移除
-    if not user_id:
-        user_id = 1
-
     start_date = date.today() - timedelta(days=days)
 
     # 聚合查询
