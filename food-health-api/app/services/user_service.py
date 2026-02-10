@@ -43,7 +43,7 @@ def generate_token(user_id: int) -> str:
     header = {"alg": "HS256", "typ": "JWT"}
     payload = {
         "sub": user_id,
-        "exp": int(time.time()) + 7 * 24 * 3600,  # 7天过期
+        "exp": int(time.time()) + settings.access_token_expire_days * 24 * 3600,
         "iat": int(time.time())
     }
     

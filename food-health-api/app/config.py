@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-配置管理模块
-使用 pydantic-settings 从环境变量读取配置
+应用配置模块
+使用 pydantic-settings 管理环境变量
+Updated: 2025-02-08 - 添加豆包 AI 配置
 """
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,9 +19,15 @@ class Settings(BaseSettings):
     # 数据库配置
     database_url: str = "sqlite:///./food_health.db"
 
-    # 百度AI配置
+    # 百度AI配置（备用）
     baidu_api_key: str = ""
     baidu_secret_key: str = ""
+
+    # 豆包 AI 配置（火山引擎方舟）- 主要识别服务
+    doubao_api_key: str = ""
+    doubao_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
+    doubao_model: str = "doubao-seed-1-8-251228"
+    doubao_image_model: str = "doubao-seedream-4-5-251128"
 
     # DeepSeek AI 配置
     deepseek_api_key: str = ""
@@ -39,6 +46,9 @@ class Settings(BaseSettings):
     # 游客模式（开发期默认开启）
     allow_guest_history: bool = True
     
+    # JWT Token 过期时间（天）
+    access_token_expire_days: int = 7
+    
     # 模型配置，从 .env 文件读取环境变量
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -55,6 +65,11 @@ class Settings(BaseSettings):
     def deepseek_configured(self) -> bool:
         """检查DeepSeek是否已配置"""
         return bool(self.deepseek_api_key)
+
+    @property
+    def doubao_configured(self) -> bool:
+        """检查豆包AI是否已配置"""
+        return bool(self.doubao_api_key)
 
     @property
     def fatsecret_configured(self) -> bool:

@@ -129,3 +129,64 @@ class CookingMethod(Base):
     
     def __repr__(self):
         return f"<CookingMethod(id={self.id}, name='{self.name}')>"
+
+
+class PremiumRecipe(Base):
+    """
+    精品食谱表 - 固定的高质量食谱内容
+    
+    特点：
+    - 人工审核的优质内容
+    - 精美的 AI 生成配图
+    - 完整的营养信息和步骤说明
+    - 支持多标签分类
+    """
+    __tablename__ = "premium_recipes"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # 基础信息
+    name = Column(String(100), nullable=False, unique=True, comment="食谱名称")
+    description = Column(Text, comment="食谱简介/描述")
+    image_url = Column(String(500), comment="主图URL（AI生成的精美配图）")
+    
+    # 分类与标签
+    category = Column(String(50), comment="主分类：早餐/午餐/晚餐/加餐/汤品/甜点")
+    tags = Column(Text, comment="标签JSON数组，如['低脂','高蛋白','素食']")
+    
+    # 烹饪信息
+    cook_time = Column(String(30), comment="烹饪时间，如'30分钟'")
+    prep_time = Column(String(30), comment="准备时间，如'10分钟'")
+    servings = Column(Integer, default=2, comment="份量（几人份）")
+    difficulty = Column(String(20), default="简单", comment="难度：简单/中等/困难")
+    
+    # 营养信息（每份）
+    calories = Column(Integer, comment="热量 kcal/份")
+    protein = Column(Float, comment="蛋白质 g/份")
+    fat = Column(Float, comment="脂肪 g/份")
+    carbs = Column(Float, comment="碳水化合物 g/份")
+    fiber = Column(Float, comment="膳食纤维 g/份")
+    sodium = Column(Float, comment="钠 mg/份")
+    
+    # 食材与步骤（JSON格式）
+    ingredients = Column(Text, comment="食材JSON数组，如[{'name':'鸡胸肉','amount':'200g'}]")
+    steps = Column(Text, comment="步骤JSON数组，如[{'step':1,'content':'准备食材','image_url':null}]")
+    
+    # 额外信息
+    tips = Column(Text, comment="烹饪小贴士")
+    suitable_for = Column(Text, comment="适合人群描述")
+    not_suitable_for = Column(Text, comment="不适合人群描述")
+    
+    # 统计与状态
+    favorite_count = Column(Integer, default=0, comment="收藏数")
+    view_count = Column(Integer, default=0, comment="浏览数")
+    is_featured = Column(Boolean, default=False, comment="是否为推荐/精选")
+    is_active = Column(Boolean, default=True, comment="是否上架")
+    sort_order = Column(Integer, default=0, comment="排序权重")
+    
+    # 元数据
+    created_at = Column(DateTime, default=datetime.now, comment="创建时间")
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")
+    
+    def __repr__(self):
+        return f"<PremiumRecipe(id={self.id}, name='{self.name}')>"

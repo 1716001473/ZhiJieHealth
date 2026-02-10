@@ -75,6 +75,18 @@
 			}
 		},
 		{
+			"path": "pages/recipe/list",
+			"style": {
+				"navigationBarTitleText": "精选食谱"
+			}
+		},
+		{
+			"path": "pages/recipe/detail",
+			"style": {
+				"navigationStyle": "custom"
+			}
+		},
+		{
 			"path": "pages/profile/edit",
 			"style": {
 				"navigationBarTitleText": "编辑资料",
@@ -85,6 +97,13 @@
 			"path": "pages/profile/password",
 			"style": {
 				"navigationBarTitleText": "修改密码",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/favorite/index",
+			"style": {
+				"navigationBarTitleText": "我的收藏",
 				"navigationStyle": "custom"
 			}
 		}

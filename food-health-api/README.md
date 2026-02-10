@@ -46,6 +46,8 @@
 
 ## 🚀 快速开始
 
+### 本地开发
+
 ### 1. 创建虚拟环境
 
 ```bash
@@ -231,6 +233,27 @@ food-health-api/
 ### 用户认证
 - 使用简单的 Token 认证机制
 - 部分接口支持游客模式（未登录）访问
+
+## 🌐 云端部署
+
+本项目支持部署到腾讯云 CloudBase。
+
+### 完整部署指南
+
+详细的部署步骤请查看：**[DEPLOY_GUIDE.md](../DEPLOY_GUIDE.md)**
+
+部署文档包含：
+- ✅ 开通 MySQL 数据库
+- ✅ 构建 Docker 镜像
+- ✅ 部署后端到 Cloud Run
+- ✅ 部署前端到静态托管
+- ✅ 配置环境变量
+- ✅ 故障排查指南
+
+### CloudBase 环境
+
+- **环境 ID**: `lhins-0owkfwzy`
+- **控制台**: https://tcb.cloud.tencent.com/dev?envId=lhins-0owkfwzy
 
 ## 🔧 常用命令
 

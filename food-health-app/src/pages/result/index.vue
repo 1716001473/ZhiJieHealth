@@ -15,6 +15,9 @@
         <view class="result-header">
           <text class="food-name">{{ resultData.top_result.name }}</text>
           <view class="badge-group">
+            <view class="food-state-badge raw" v-if="resultData.top_result.food_state === 'raw'">
+              <text>生食材</text>
+            </view>
             <view class="source-badge">
               <text>{{ getSourceLabel(resultData.top_result) }}</text>
             </view>
@@ -144,10 +147,10 @@
         </view>
 
         <!-- 禁忌人群 -->
-        <view class="warning-card" v-if="resultData.top_result.contraindications?.length">
+        <view class="warning-card" v-if="hasContraindications">
           <text class="card-title">⚠️ 不适宜人群</text>
           <view 
-            v-for="(item, index) in resultData.top_result.contraindications" 
+            v-for="(item, index) in getContraindications" 
             :key="index"
             class="warning-item"
           >
@@ -155,10 +158,10 @@
               <text :class="['severity-badge', getSeverityClass(item.severity)]">
                 {{ item.severity }}
               </text>
-              <text class="condition-type">{{ item.condition_type }}</text>
+              <text class="condition-type">{{ item.condition || item.condition_type }}</text>
             </view>
             <text class="warning-reason">{{ item.reason }}</text>
-            <text class="warning-suggestion" v-if="item.suggestion">建议：{{ item.suggestion }}</text>
+            <text class="warning-suggestion" v-if="item.advice || item.suggestion">建议：{{ item.advice || item.suggestion }}</text>
           </view>
         </view>
       </view>
@@ -185,18 +188,54 @@
 
     <!-- 底部操作 -->
     <view class="bottom-actions">
-      <button class="action-btn secondary" @click="goToRecordAdd">
+      <button class="action-btn primary" @click="goToRecordAdd">
         记录到饮食
       </button>
-      <button class="action-btn primary" @click="goBack">
-        继续识别
-      </button>
+    </view>
+
+    <!-- 添加饮食记录弹窗 -->
+    <view class="popup-mask" v-if="showMealPopup" @click="showMealPopup = false">
+      <view class="popup-content" @click.stop>
+        <text class="popup-title">添加到饮食记录</text>
+        <text class="popup-food-name">{{ resultData?.top_result?.name }}</text>
+
+        <view class="meal-type-section">
+          <text class="popup-label">选择餐次</text>
+          <view class="meal-type-options">
+            <view
+              v-for="mt in mealTypes" :key="mt.value"
+              class="meal-type-item"
+              :class="{ active: selectedMealType === mt.value }"
+              @click="selectedMealType = mt.value"
+            >
+              <text class="mt-icon">{{ mt.icon }}</text>
+              <text class="mt-label">{{ mt.label }}</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="servings-section">
+          <text class="popup-label">份数</text>
+          <view class="servings-row">
+            <view class="servings-control">
+              <view class="servings-btn" @click="changeServings(-1)"><text>−</text></view>
+              <text class="servings-value">{{ selectedServings }}</text>
+              <view class="servings-btn" @click="changeServings(1)"><text>+</text></view>
+            </view>
+            <text class="servings-cal">约 {{ getMealCalories() }} kcal</text>
+          </view>
+        </view>
+
+        <button class="popup-confirm-btn" @click="confirmAddMeal" :loading="submitting">
+          确认添加
+        </button>
+      </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { API_BASE_URL } from '@/config.js'
 import { request } from '@/utils/http'
 
@@ -220,6 +259,18 @@ const dishSizes = [
 ]
 const selectedDish = ref('一碗')
 const dishCalories = ref<number | null>(null)
+
+// 添加饮食记录弹窗
+const showMealPopup = ref(false)
+const selectedMealType = ref('lunch')
+const selectedServings = ref(1)
+const submitting = ref(false)
+const mealTypes = [
+  { value: 'breakfast', label: '早餐', icon: '🌅' },
+  { value: 'lunch', label: '午餐', icon: '☀️' },
+  { value: 'dinner', label: '晚餐', icon: '🌙' },
+  { value: 'snack', label: '加餐', icon: '🍪' },
+]
 
 onMounted(() => {
   const pages = getCurrentPages()
@@ -251,7 +302,31 @@ onMounted(() => {
   
   if (options.image) {
     imageUrl.value = decodeURIComponent(options.image)
+  } else if (resultData.value?.image_url) {
+    // 尝试从结果数据中恢复图片 URL
+    const url = resultData.value.image_url
+    if (url.startsWith('/static/')) {
+       imageUrl.value = `${API_BASE_URL}${url}`
+    } else {
+       imageUrl.value = url
+    }
   }
+})
+
+// 计算属性：判断是否有不适宜人群
+const hasContraindications = computed(() => {
+  // 优先检查 top_result 中的 contraindications，再检查 results 中的
+  const fromTopResult = resultData.value?.top_result?.contraindications
+  const fromResults = resultData.value?.results?.[0]?.contraindications
+  const list = fromTopResult || fromResults
+  return Array.isArray(list) && list.length > 0
+})
+
+// 获取不适宜人群列表
+const getContraindications = computed(() => {
+  const fromTopResult = resultData.value?.top_result?.contraindications
+  const fromResults = resultData.value?.results?.[0]?.contraindications
+  return fromTopResult || fromResults || []
 })
 
 // 保存到历史记录
@@ -265,6 +340,9 @@ const saveToHistory = () => {
   // 保存完整识别结果 JSON
   const resultJson = JSON.stringify(resultData.value)
   
+  // 获取图片 URL（从 API 返回的 image_url 或本地缓存）
+  const savedImageUrl = resultData.value.image_url || imageUrl.value || ''
+  
   request({
     url: `${API_BASE}/api/v1/history`,
     method: 'POST',
@@ -275,6 +353,7 @@ const saveToHistory = () => {
     data: {
       recognized_food: topResult.name,
       confidence: topResult.confidence,
+      image_url: savedImageUrl,
       selected_portion: selectedPortion.value,
       selected_cooking: selectedCooking.value,
       final_calories_min: Math.round(calories * 0.8),
@@ -368,14 +447,85 @@ const getSourceLabel = (item: any) => {
 }
 
 const goToRecordAdd = () => {
-  const name = resultData.value?.top_result?.name
-  const keyword = name ? encodeURIComponent(name) : ''
-  const date = new Date().toISOString().split('T')[0]
-  const params = []
-  if (keyword) params.push(`keyword=${keyword}`)
-  params.push(`date=${date}`)
-  const query = params.length ? `?${params.join('&')}` : ''
-  uni.navigateTo({ url: `/pages/record/add${query}` })
+  const token = uni.getStorageSync('token')
+  if (!token) {
+    uni.showToast({ title: '请先登录', icon: 'none' })
+    return
+  }
+  const hour = new Date().getHours()
+  if (hour < 10) selectedMealType.value = 'breakfast'
+  else if (hour < 14) selectedMealType.value = 'lunch'
+  else if (hour < 20) selectedMealType.value = 'dinner'
+  else selectedMealType.value = 'snack'
+  selectedServings.value = 1
+  showMealPopup.value = true
+}
+
+const changeServings = (delta: number) => {
+  const next = selectedServings.value + delta
+  if (next >= 1 && next <= 10) selectedServings.value = next
+}
+
+const getMealCalories = () => {
+  const nutrition = resultData.value?.top_result?.nutrition
+  const cal = nutrition?.calories || parseInt(resultData.value?.top_result?.baidu_calorie) || 0
+  return Math.round(cal * selectedServings.value)
+}
+
+const confirmAddMeal = async () => {
+  submitting.value = true
+  try {
+    const token = uni.getStorageSync('token')
+    const today = new Date().toISOString().split('T')[0]
+    const topResult = resultData.value?.top_result
+    const nutrition = topResult?.nutrition
+
+    const calories = nutrition?.calories || parseInt(topResult?.baidu_calorie) || 0
+    const protein = nutrition?.protein || 0
+    const fat = nutrition?.fat || 0
+    const carb = nutrition?.carbohydrate || 0
+
+    const payload = {
+      meal_date: today,
+      meal_type: selectedMealType.value,
+      food_name: topResult.name,
+      unit_weight: 100 * selectedServings.value,
+      image_url: resultData.value?.image_url || null,
+      data_source: topResult.found_in_database ? 'database' : 'user_custom',
+      per_100g_calories: calories,
+      per_100g_protein: protein,
+      per_100g_fat: fat,
+      per_100g_carb: carb,
+    }
+
+    const res = await uni.request({
+      url: `${API_BASE}/api/v1/meal/record`,
+      method: 'POST',
+      header: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      data: payload,
+    })
+
+    const data = res.data as any
+    if (data.code === 0) {
+      showMealPopup.value = false
+      uni.showToast({ title: '添加成功', icon: 'success' })
+      uni.$emit('meal-record-updated')
+      // 存储餐次类型，饮食记录页会读取并自动滚动到该区域
+      uni.setStorageSync('lastMealType', selectedMealType.value)
+      setTimeout(() => {
+        uni.navigateTo({ url: '/pages/record/index' })
+      }, 800)
+    } else {
+      uni.showToast({ title: data.message || '添加失败', icon: 'none' })
+    }
+  } catch (e) {
+    uni.showToast({ title: '添加失败', icon: 'none' })
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -430,6 +580,15 @@ const goToRecordAdd = () => {
   display: flex;
   align-items: center;
   gap: 12rpx;
+}
+
+.food-state-badge.raw {
+  padding: 6rpx 16rpx;
+  background: #E8F5E9;
+  border-radius: 20rpx;
+  font-size: 22rpx;
+  color: #2E7D32;
+  border: 1rpx solid #A5D6A7;
 }
 
 .source-badge {
@@ -797,5 +956,128 @@ const goToRecordAdd = () => {
     background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
     color: #fff;
   }
+}
+
+/* 添加饮食弹窗 */
+.popup-mask {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 999;
+  display: flex;
+  align-items: flex-end;
+}
+
+.popup-content {
+  width: 100%;
+  background: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 40rpx 36rpx calc(40rpx + env(safe-area-inset-bottom));
+}
+
+.popup-title {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+  text-align: center;
+}
+
+.popup-food-name {
+  display: block;
+  font-size: 26rpx;
+  color: #999;
+  text-align: center;
+  margin-top: 8rpx;
+  margin-bottom: 32rpx;
+}
+
+.popup-label {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 16rpx;
+}
+
+.meal-type-section {
+  margin-bottom: 32rpx;
+}
+
+.meal-type-options {
+  display: flex;
+  gap: 16rpx;
+}
+
+.meal-type-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  padding: 20rpx 0;
+  background: #F5F5F5;
+  border-radius: 16rpx;
+  border: 2rpx solid transparent;
+
+  &.active {
+    background: #E8F5E9;
+    border-color: #4CAF50;
+  }
+}
+
+.mt-icon { font-size: 36rpx; }
+.mt-label { font-size: 24rpx; color: #666; }
+.meal-type-item.active .mt-label { color: #4CAF50; font-weight: 500; }
+
+.servings-section {
+  margin-bottom: 32rpx;
+}
+
+.servings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.servings-control {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.servings-btn {
+  width: 56rpx; height: 56rpx;
+  border-radius: 50%;
+  background: #F5F5F5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  color: #333;
+}
+
+.servings-value {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333;
+  min-width: 40rpx;
+  text-align: center;
+}
+
+.servings-cal {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #4CAF50;
+}
+
+.popup-confirm-btn {
+  width: 100%;
+  padding: 28rpx;
+  background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 500;
+  border-radius: 16rpx;
 }
 </style>

@@ -366,11 +366,13 @@ const fetchNutritionData = async () => {
   try {
     const res = await request({ url: `${API_BASE_URL}/api/v1/health/nutrition/history?days=${nutritionDays.value}`, method: 'GET' })
     if (res.data?.code === 0) {
-      nutritionHistory.value = res.data.data.map((item: any) => ({
+      const rawData = res.data.data.map((item: any) => ({
         label: item.date.slice(5),
         value: item.calories,
         color: item.calories > 2500 ? '#FF5722' : '#FF9800' // 高热量标红
       }))
+      // 30天视图采样，避免柱子过于拥挤
+      nutritionHistory.value = nutritionDays.value >= 30 ? sampleData(rawData, 15) : rawData
     }
   } catch (e) {}
 }

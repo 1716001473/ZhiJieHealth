@@ -11,9 +11,7 @@
         <text class="empty-icon">🔒</text>
         <text class="empty-title">请先登录</text>
         <text class="empty-desc">登录后可查看识别历史</text>
-        <button class="go-btn" @click="goLogin">
-          去登录
-        </button>
+        <button class="go-btn" @click="goLogin">去登录</button>
       </view>
 
       <!-- 加载中 -->
@@ -27,9 +25,7 @@
         <text class="empty-icon">📝</text>
         <text class="empty-title">暂无识别记录</text>
         <text class="empty-desc">去首页拍照识别食物吧</text>
-        <button class="go-btn" @click="goToIndex">
-          去识别
-        </button>
+        <button class="go-btn" @click="goToIndex">去识别</button>
       </view>
 
       <!-- 历史列表 -->
@@ -40,21 +36,37 @@
           :key="item.id"
           @click="viewDetail(item)"
         >
+          <!-- 缩略图 -->
+          <view class="item-thumb">
+            <image 
+              v-if="getImageUrl(item)" 
+              :src="getImageUrl(item)" 
+              mode="aspectFill" 
+              class="thumb-image"
+            />
+            <view v-else class="thumb-placeholder">
+              <text class="thumb-icon">🍽️</text>
+            </view>
+          </view>
+          
+          <!-- 主信息 -->
           <view class="item-main">
             <text class="food-name">{{ item.recognized_food }}</text>
             <text class="food-meta">
               {{ item.selected_portion || '中份' }} · {{ item.selected_cooking || '少油炒' }}
             </text>
-            <text class="calories" v-if="item.final_calories_min">
-              🔥 {{ item.final_calories_min }}~{{ item.final_calories_max }} kcal
-            </text>
+            <view class="item-bottom">
+              <text class="calories" v-if="item.final_calories_min">
+                🔥 {{ item.final_calories_min }}~{{ item.final_calories_max }} kcal
+              </text>
+              <text class="meal-type-inline" v-if="item.meal_type">{{ item.meal_type }}</text>
+            </view>
           </view>
+          
+          <!-- 右侧信息 -->
           <view class="item-side">
-            <text class="meal-type" v-if="item.meal_type">{{ item.meal_type }}</text>
             <text class="item-time">{{ formatTime(item.created_at) }}</text>
-          </view>
-          <view class="item-actions" @click.stop>
-            <text class="delete-btn" @click="deleteItem(item.id)">🗑️</text>
+            <text class="delete-btn" @click.stop="deleteItem(item.id)">🗑️</text>
           </view>
         </view>
         
@@ -65,7 +77,6 @@
       </view>
     </view>
 
-    <!-- 底部导航 -->
     <!-- 底部导航 -->
     <view class="bottom-nav">
       <view class="nav-item" @click="goToIndex">
@@ -221,11 +232,44 @@ const viewDetail = (item: any) => {
     return
   }
   
-  // 跳转到结果页，传递缓存的数据
+  // 跳转到结果页，传递缓存的数据和图片URL
   const data = encodeURIComponent(item.result_data)
+  // 获取图片链接并编码，注意处理 relative Url
+  const imgUrl = getImageUrl(item)
+  const image = encodeURIComponent(imgUrl)
+  
   uni.navigateTo({
-    url: `/pages/result/index?data=${data}&from=history`
+    url: `/pages/result/index?data=${data}&image=${image}&from=history`
   })
+}
+
+// 获取识别历史项的图片 URL
+const getImageUrl = (item: any): string => {
+  // 优先使用直接存储的 image_url
+  if (item.image_url) {
+    // 如果是相对路径，拼接 API 地址
+    if (item.image_url.startsWith('/static/')) {
+      return `${API_BASE}${item.image_url}`
+    }
+    return item.image_url
+  }
+  
+  // 其次尝试从 result_data 中提取
+  if (item.result_data) {
+    try {
+      const resultData = JSON.parse(item.result_data)
+      if (resultData.image_url) {
+        if (resultData.image_url.startsWith('/static/')) {
+          return `${API_BASE}${resultData.image_url}`
+        }
+        return resultData.image_url
+      }
+    } catch (e) {
+      // 解析失败忽略
+    }
+  }
+  
+  return ''
 }
 </script>
 
@@ -302,15 +346,59 @@ const viewDetail = (item: any) => {
 .history-item {
   display: flex;
   align-items: center;
-  padding: 30rpx;
+  padding: 24rpx;
   background: #fff;
   border-radius: 16rpx;
   margin-bottom: 20rpx;
   box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.04);
 }
 
+// 缩略图
+.item-thumb {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 12rpx;
+  overflow: hidden;
+  margin-right: 24rpx;
+  flex-shrink: 0;
+  
+  .thumb-image {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.thumb-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumb-icon {
+  font-size: 48rpx;
+}
+
 .item-main {
   flex: 1;
+  min-width: 0;
+}
+
+.item-bottom {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+
+.meal-type-inline {
+  font-size: 22rpx;
+  color: #4CAF50;
+  background: #E8F5E9;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
 }
 
 .food-name {

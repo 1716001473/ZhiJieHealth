@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.database.connection import create_tables, init_database
-from app.api.v1 import recognition, food, calories, user, meal, health, plan
+from app.api.v1 import recognition, food, calories, user, meal, health, plan, premium_recipe, admin, favorite
 
 logger = logging.getLogger(__name__)
 
@@ -31,15 +31,23 @@ async def lifespan(app: FastAPI):
     init_database()
     logger.info("数据库初始化完成")
     
-    if settings.baidu_ai_configured:
-        logger.info("百度AI已配置")
+    if settings.doubao_configured:
+        logger.info("✅ 豆包AI已配置（主要识别服务）")
     else:
-        logger.warning("百度AI未配置，识别功能将使用模拟数据")
+        logger.warning("⚠️ 豆包AI未配置")
+    
+    if settings.baidu_ai_configured:
+        logger.info("✅ 百度AI已配置（备用识别服务）")
+    else:
+        logger.warning("⚠️ 百度AI未配置")
+    
+    if not settings.doubao_configured and not settings.baidu_ai_configured:
+        logger.warning("⚠️ 无识别服务配置，将使用模拟数据")
     
     if settings.deepseek_configured:
-        logger.info("DeepSeek AI已配置")
+        logger.info("✅ DeepSeek AI已配置")
     else:
-        logger.warning("DeepSeek未配置，本地无数据时将仅显示百度热量")
+        logger.warning("⚠️ DeepSeek未配置，豆包识别失败时将无法补充营养信息")
     
     yield
     
@@ -102,6 +110,21 @@ app.include_router(
     prefix="/api/v1",
     tags=["推荐食谱"]
 )
+app.include_router(
+    premium_recipe.router,
+    prefix="/api/v1/premium",
+    tags=["精品食谱"]
+)
+app.include_router(
+    admin.router,
+    prefix="/api/v1",
+    tags=["管理后台"]
+)
+app.include_router(
+    favorite.router,
+    prefix="/api/v1",
+    tags=["用户收藏"]
+)
 
 
 # 挂载静态文件目录（用于头像等资源访问）
@@ -117,6 +140,7 @@ async def health_check():
         "status": "ok",
         "app_name": settings.app_name,
         "version": settings.api_version,
+        "doubao_ai_configured": settings.doubao_configured,
         "baidu_ai_configured": settings.baidu_ai_configured,
     }
 
@@ -124,6 +148,15 @@ async def health_check():
 @app.get("/api/v1/status", tags=["健康检查"])
 async def api_status():
     """API 状态接口"""
+    
+    # 脱敏处理函数
+    def mask_key(key: str) -> str:
+        if not key:
+            return ""
+        if len(key) <= 8:
+            return "*" * len(key)
+        return key[:4] + "*" * (len(key) - 8) + key[-4:]
+    
     return {
         "code": 0,
         "message": "success",
@@ -131,10 +164,31 @@ async def api_status():
             "status": "running",
             "version": settings.api_version,
             "features": {
-                "recognition": settings.baidu_ai_configured,
+                "recognition": settings.doubao_configured or settings.baidu_ai_configured,
+                "doubao_configured": settings.doubao_configured,
+                "baidu_configured": settings.baidu_ai_configured,
                 "deepseek_configured": settings.deepseek_configured,
                 "nutrition": True,
                 "calorie_calculation": True,
+            },
+            # AI 配置详情（脱敏）
+            "ai_config": {
+                "doubao": {
+                    "configured": settings.doubao_configured,
+                    "api_key": mask_key(settings.doubao_api_key) if settings.doubao_api_key else "",
+                    "base_url": settings.doubao_base_url or "https://ark.cn-beijing.volces.com/api/v3",
+                    "model": settings.doubao_model or "",
+                },
+                "baidu": {
+                    "configured": settings.baidu_ai_configured,
+                    "api_key": mask_key(settings.baidu_api_key) if settings.baidu_api_key else "",
+                },
+                "deepseek": {
+                    "configured": settings.deepseek_configured,
+                    "api_key": mask_key(settings.deepseek_api_key) if settings.deepseek_api_key else "",
+                    "base_url": settings.deepseek_base_url or "https://api.deepseek.com",
+                },
             }
         }
     }
+

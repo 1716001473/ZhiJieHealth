@@ -81,16 +81,27 @@
       </view>
     </view>
     
-    <!-- 功能入口 -->
-    <view class="feature-entry" @click="goDietPlan">
-      <view class="entry-content">
-        <text class="entry-icon">🥗</text>
-        <view class="entry-text">
-          <text class="entry-title">推荐食谱</text>
-          <text class="entry-desc">AI 定制专属饮食计划</text>
-        </view>
+    <!-- 双入口功能区 -->
+    <view class="feature-grid">
+      <view class="feature-card ai-feature" @click="goDietPlan">
+         <view class="feature-icon-box ai-icon-bg">
+           <text class="feature-icon">🤖</text>
+         </view>
+         <view class="feature-text">
+           <text class="feature-title">AI 智能食谱</text>
+           <text class="feature-desc">量身定制周计划</text>
+         </view>
       </view>
-      <text class="entry-arrow">›</text>
+      
+      <view class="feature-card recipe-feature" @click="goRecipeList">
+         <view class="feature-icon-box recipe-icon-bg">
+           <text class="feature-icon">🥗</text>
+         </view>
+         <view class="feature-text">
+           <text class="feature-title">精选食谱</text>
+           <text class="feature-desc">营养师精心推荐</text>
+         </view>
+      </view>
     </view>
     
     <!-- 每日餐饮列表 -->
@@ -133,6 +144,7 @@
       <view class="meal-group" :id="`meal-${type.key}`" v-for="type in mealTypes" :key="type.key">
         <view class="group-header">
           <view class="title-row">
+            <text class="meal-icon">{{ type.icon }}</text>
             <text class="title">{{ type.name }}</text>
             <text class="sub">{{ getMealCalories(type.key) }} 千卡</text>
           </view>
@@ -206,10 +218,10 @@ export default {
         records: []
       },
       mealTypes: [
-        { key: 'breakfast', name: '早餐' },
-        { key: 'lunch', name: '午餐' },
-        { key: 'dinner', name: '晚餐' },
-        { key: 'snack', name: '加餐' }
+        { key: 'breakfast', name: '早餐', icon: '🌅' },
+        { key: 'lunch', name: '午餐', icon: '☀️' },
+        { key: 'dinner', name: '晚餐', icon: '🌙' },
+        { key: 'snack', name: '加餐', icon: '🍪' }
       ]
     }
   },
@@ -262,13 +274,18 @@ export default {
       return API_BASE_URL + url;
     },
     async fetchData() {
+      const token = uni.getStorageSync('token');
+      if (!token) {
+        // Not logged in, skip fetch to avoid 401
+        return;
+      }
       this.loading = true;
       try {
         const res = await uni.request({
           url: `${API_BASE_URL}/api/v1/meal/daily-report`,
           method: 'GET',
           header: {
-            'Authorization': `Bearer ${uni.getStorageSync('token')}`
+            'Authorization': `Bearer ${token}`
           },
           data: {
             date: this.currentDateStr
@@ -433,6 +450,9 @@ export default {
     },
     goDietPlan() {
         uni.navigateTo({ url: '/pages/plan/index' });
+    },
+    goRecipeList() {
+        uni.navigateTo({ url: '/pages/recipe/list' });
     }
   }
 }
@@ -665,42 +685,69 @@ export default {
   gap: 10px;
 }
 
-.feature-entry {
+.feature-grid {
   margin: 15px;
+  display: flex;
+  gap: 15px;
+}
+
+.feature-card {
+  flex: 1;
   background: #fff;
-  border-radius: 12px;
-  padding: 15px;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  transition: transform 0.2s;
+}
+
+.feature-card:active {
+  transform: scale(0.98);
+}
+
+.feature-icon-box {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  justify-content: center;
+  margin-bottom: 12px;
 }
 
-.entry-content {
-  display: flex;
-  align-items: center;
+.ai-icon-bg {
+  background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
 }
 
-.entry-icon {
-  font-size: 24px;
-  margin-right: 15px;
+.recipe-icon-bg {
+  background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
 }
 
-.entry-title {
+.feature-icon {
+  font-size: 28rpx;
+}
+
+.feature-title {
   font-size: 16px;
   font-weight: bold;
   color: #333;
-  display: block;
+  margin-bottom: 4px;
 }
 
-.entry-desc {
+.feature-desc {
   font-size: 12px;
-  color: #999;
+  color: #888;
 }
 
-.entry-arrow {
-  color: #ccc;
-  font-size: 20px;
+.ai-feature .feature-title {
+  color: #2E7D32;
+}
+
+.recipe-feature .feature-title {
+  color: #EF6C00;
 }
 
 .macro-item {
@@ -739,6 +786,11 @@ export default {
   font-size: 16px;
   font-weight: bold;
   margin-right: 10px;
+}
+
+.meal-icon {
+  font-size: 20px;
+  margin-right: 6px;
 }
 
 .sub {

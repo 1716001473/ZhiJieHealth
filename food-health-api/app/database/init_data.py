@@ -288,6 +288,8 @@ def init_foods(db: Session):
 def init_all_data(db: Session):
     """初始化所有数据"""
     from app.database.chinese_foods_data import init_chinese_foods
+    from app.database.common_foods_data import init_common_foods
+    from app.database.premium_recipes_data import init_premium_recipes
 
     print("📦 正在初始化数据库...")
     init_cooking_methods(db)
@@ -295,4 +297,6 @@ def init_all_data(db: Session):
     init_contraindications(db)
     init_foods(db)
     init_chinese_foods(db)  # 中国常见食材数据
+    init_common_foods(db)   # 常见单品食物（早餐/加餐/水果/饮品）
+    init_premium_recipes(db)  # 精品食谱数据
     print("📦 数据库初始化完成")

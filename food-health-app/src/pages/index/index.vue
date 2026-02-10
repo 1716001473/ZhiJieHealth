@@ -113,7 +113,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { API_BASE_URL } from '@/config.js'
 import { buildChooseImageOptions } from '@/utils/imageSelect.js'
 import { request } from '@/utils/http'
@@ -134,6 +135,13 @@ const fatPercent = computed(() => reportUtils.safePercent(dietReport.value.total
 
 // 获取今日饮食摘要
 const fetchDailyReport = async () => {
+  // Check for token first to avoid 401 on guest visit
+  const token = uni.getStorageSync('token')
+  if (!token) {
+    dietReport.value = reportUtils.normalizeReport(null)
+    return
+  }
+
   try {
     const today = new Date().toISOString().slice(0, 10)
     const res = await request({
@@ -229,7 +237,7 @@ const goProfile = () => {
   uni.navigateTo({ url: '/pages/profile/index' })
 }
 
-onMounted(() => {
+onShow(() => {
   fetchDailyReport()
 })
 </script>

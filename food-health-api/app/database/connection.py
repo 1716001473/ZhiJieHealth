@@ -47,7 +47,7 @@ def get_db():
 def create_tables():
     """创建所有数据库表"""
     # 导入所有模型以确保它们被注册
-    from app.models import food, user, user_meal, weight_record  # noqa: F401
+    from app.models import food, user, user_meal, weight_record, user_favorite  # noqa: F401
     Base.metadata.create_all(bind=engine)
 
 

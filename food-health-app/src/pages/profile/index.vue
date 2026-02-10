@@ -58,6 +58,12 @@
 
       <!-- 功能菜单 -->
       <view class="menu-section">
+        <view class="menu-item" @click="goFavorites" v-if="user">
+          <text class="menu-icon">❤️</text>
+          <text class="menu-text">我的收藏</text>
+          <text class="menu-arrow">›</text>
+        </view>
+
         <view class="menu-item" @click="goHistory" v-if="user">
           <text class="menu-icon">📋</text>
           <text class="menu-text">识别历史</text>
@@ -117,8 +123,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { API_BASE_URL } from '@/config.js'
+import { request } from '@/utils/http'
 import reportUtils from '@/utils/report'
 import healthProfile from '@/utils/healthProfile'
 
@@ -127,11 +135,13 @@ const todayReport = ref<any>(null)
 const profileProgress = ref(0)
 const healthFocus = ref('完善健康档案，获取个性化建议')
 
-onMounted(() => {
+onShow(() => {
   // 从本地存储获取用户信息
   const storedUser = uni.getStorageSync('user')
   if (storedUser) {
     user.value = storedUser
+  } else {
+    user.value = null
   }
   const storedProfile = uni.getStorageSync('healthProfile') || {}
   profileProgress.value = healthProfile.calcProfileCompletion(storedProfile)
@@ -140,15 +150,21 @@ onMounted(() => {
 })
 
 const loadTodayReport = async () => {
+  const token = uni.getStorageSync('token')
+  if (!token) {
+    todayReport.value = null
+    return
+  }
+
   try {
     const date = new Date().toISOString().split('T')[0]
-    const res = await uni.request({
-      url: `${API_BASE_URL}/api/v1/meal/daily-report`,
+    const res = await request({
+      url: `${API_BASE_URL}/api/v1/meal/daily-report?date=${date}`,
       method: 'GET',
-      data: { date }
+      silentAuth: true
     })
-    if (res.data?.code === 0) {
-      todayReport.value = reportUtils.normalizeReport(res.data.data)
+    if (res.statusCode === 200 && (res.data as any)?.code === 0) {
+      todayReport.value = reportUtils.normalizeReport((res.data as any).data)
     }
   } catch (e) {
     todayReport.value = null
@@ -175,6 +191,14 @@ const goHistory = () => {
     return
   }
   uni.navigateTo({ url: '/pages/history/index' })
+}
+
+const goFavorites = () => {
+  if (!user.value) {
+    uni.showToast({ title: '请先登录', icon: 'none' })
+    return
+  }
+  uni.navigateTo({ url: '/pages/favorite/index' })
 }
 
 const goHealthProfile = () => {

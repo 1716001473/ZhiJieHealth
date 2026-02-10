@@ -24,3 +24,5 @@ Thumbs.db
 # Sub-project git
 food-health-api/.git/
 food-health-app/.git/
+nul
+.claude/
