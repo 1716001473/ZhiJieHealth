@@ -24,5 +24,14 @@ Thumbs.db
 # Sub-project git
 food-health-api/.git/
 food-health-app/.git/
+
+# Temporary / Garbage
+11111_123456.txt
+npm run devh5.txt
+后端.txt
+「模型未知原因导致字段
+nul
+*.txt
+!requirements.txt
 nul
 .claude/
