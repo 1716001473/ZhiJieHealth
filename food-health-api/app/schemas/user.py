@@ -20,12 +20,24 @@ class UserLoginRequest(BaseModel):
     password: str = Field(..., description="密码")
 
 
+class WeChatLoginRequest(BaseModel):
+    """微信登录请求"""
+    code: str = Field(..., description="微信登录凭证 code")
+    userInfo: Optional[dict] = Field(None, description="微信用户信息（可选，用于自动更新头像昵称）")
+
+
 class UserResponse(BaseModel):
     """用户信息响应"""
     id: int
     username: str
     nickname: Optional[str] = None
     avatar_url: Optional[str] = None
+    # 健康档案基础数据
+    weight: Optional[float] = None
+    height: Optional[float] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    activity: Optional[str] = None
     health_conditions: List[str] = []
     allergies: List[str] = []
     health_goal: Optional[str] = None
@@ -46,6 +58,12 @@ class UserUpdateRequest(BaseModel):
     """用户信息更新请求"""
     nickname: Optional[str] = None
     avatar_url: Optional[str] = None
+    # 健康档案基础数据
+    weight: Optional[float] = None
+    height: Optional[float] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    activity: Optional[str] = None
     health_conditions: Optional[List[str]] = None
     allergies: Optional[List[str]] = None
     health_goal: Optional[str] = None

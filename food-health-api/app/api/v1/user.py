@@ -3,7 +3,7 @@
 用户 API 路由
 """
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Header, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Header, File, UploadFile, Request
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
@@ -13,9 +13,11 @@ from app.schemas.user import (
     UserRegisterRequest, UserLoginRequest, UserLoginResponse,
     UserResponse, UserUpdateRequest,
     HistoryListResponse, HistoryItemResponse, SaveHistoryRequest,
-    ChangePasswordRequest, AvatarUploadRequest, AvatarUploadResponse
+    ChangePasswordRequest, AvatarUploadRequest, AvatarUploadResponse,
+    WeChatLoginRequest
 )
 from app.config import get_settings
+from app.rate_limit import limiter
 
 router = APIRouter()
 settings = get_settings()
@@ -59,8 +61,10 @@ def optional_login(
 
 
 @router.post("/user/register", response_model=APIResponse[UserResponse])
+@limiter.limit("3/minute")  # 注册接口：每分钟最多 3 次
 async def register(
-    request: UserRegisterRequest,
+    request_body: UserRegisterRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -71,7 +75,7 @@ async def register(
     - **nickname**: 昵称（可选）
     """
     user_service = UserService(db)
-    user = user_service.register(request)
+    user = user_service.register(request_body)
     
     if not user:
         raise HTTPException(status_code=400, detail="用户名已存在")
@@ -83,8 +87,10 @@ async def register(
 
 
 @router.post("/user/login", response_model=APIResponse[UserLoginResponse])
+@limiter.limit("5/minute")  # 登录接口：每分钟最多 5 次（防暂力破解）
 async def login(
-    request: UserLoginRequest,
+    request_body: UserLoginRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -94,7 +100,7 @@ async def login(
     `Authorization: Bearer <token>`
     """
     user_service = UserService(db)
-    user = user_service.login(request.username, request.password)
+    user = user_service.login(request_body.username, request_body.password)
     
     if not user:
         raise HTTPException(status_code=401, detail="用户名或密码错误")
@@ -107,6 +113,57 @@ async def login(
             token=token
         ),
         message="登录成功"
+    )
+
+
+@router.post("/user/wechat-login", response_model=APIResponse[UserLoginResponse])
+async def wechat_login(
+    request_body: WeChatLoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    微信小程序一键登录
+    
+    接收 code，换取 openid，自动注册或登录
+    """
+    from app.services.wechat_service import wechat_service
+    
+    # 1. code 换取 openid
+    wx_session = await wechat_service.code_to_session(request_body.code)
+    if not wx_session or "openid" not in wx_session:
+        raise HTTPException(status_code=400, detail="微信登录失败，无法获取 OpenID")
+    
+    openid = wx_session["openid"]
+    unionid = wx_session.get("unionid")
+    
+    # 2. 查找或创建用户
+    user_service = UserService(db)
+    user = user_service.get_user_by_openid(openid)
+    
+    is_new_user = False
+    if not user:
+        # 自动注册
+        user = user_service.create_wechat_user(
+            openid=openid, 
+            unionid=unionid,
+            user_info=request_body.userInfo
+        )
+        is_new_user = True
+    elif request_body.userInfo:
+        # 更新用户信息（如果提供了且用户未设置头像昵称）
+        # 这里可以根据业务需求决定是否覆盖
+        pass
+
+    # 3. 生成 token
+    token = generate_token(user.id)
+    
+    return APIResponse.success(
+        data=UserLoginResponse(
+            user=user_service.to_response(user),
+            token=token
+        ),
+        message="注册成功" if is_new_user else "登录成功"
     )
 
 
@@ -133,6 +190,17 @@ async def update_profile(
 ):
     """更新用户信息"""
     user_service = UserService(db)
+    # 1. 内容安全检测 (昵称)
+    if request.nickname:
+        from app.services.wechat_service import wechat_service
+        # 获取当前用户 openid
+        user_check = user_service.get_user_by_id(user_id)
+        if user_check and user_check.openid:
+            # 必须 await 异步方法
+            is_valid = await wechat_service.msg_sec_check(request.nickname, user_check.openid)
+            if not is_valid:
+                raise HTTPException(status_code=400, detail="昵称包含违规内容，请修改")
+
     user = user_service.update_user(
         user_id,
         nickname=request.nickname,
@@ -183,6 +251,18 @@ async def save_history(
 ):
     """保存识别历史"""
     history_service = HistoryService(db)
+    # 1. 内容安全检测 (备注)
+    if request.note:
+        from app.services.wechat_service import wechat_service
+        # 获取当前用户 openid
+        user_service = UserService(db)
+        user = user_service.get_user_by_id(user_id)
+        if user and user.openid:
+            # 必须 await 异步方法
+            is_valid = await wechat_service.msg_sec_check(request.note, user.openid)
+            if not is_valid:
+                raise HTTPException(status_code=400, detail="备注包含违规内容，请修改")
+
     history = history_service.save_history(
         user_id=user_id,
         recognized_food=request.recognized_food,
@@ -329,8 +409,10 @@ async def upload_avatar_file(
 # ========== 修改密码 ==========
 
 @router.put("/user/password", response_model=APIResponse)
+@limiter.limit("5/minute")  # 修改密码接口：每分钟最多 5 次
 async def change_password(
-    request: ChangePasswordRequest,
+    request_body: ChangePasswordRequest,
+    request: Request,
     user_id: int = Depends(require_login),
     db: Session = Depends(get_db),
 ):
@@ -348,11 +430,11 @@ async def change_password(
         raise HTTPException(status_code=404, detail="用户不存在")
 
     # 验证旧密码
-    if not verify_password(request.old_password, user.password_hash):
+    if not verify_password(request_body.old_password, user.password_hash):
         raise HTTPException(status_code=400, detail="旧密码错误")
 
     # 更新密码
-    user.password_hash = hash_password(request.new_password)
+    user.password_hash = hash_password(request_body.new_password)
     db.commit()
 
     return APIResponse.success(message="密码修改成功")

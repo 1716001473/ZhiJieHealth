@@ -48,14 +48,14 @@ class MealRecord(Base):
 
     # 实际摄入量及计算得到的营养值
     meal_date = Column(Date, nullable=False, comment="记录日期")
-    meal_type = Column(SqlEnum(MealTypeEnum), nullable=False, comment="餐次类型")
+    meal_type = Column(SqlEnum(MealTypeEnum, values_callable=lambda x: [e.value for e in x]), nullable=False, comment="餐次类型")
     unit_weight = Column(Float, nullable=False, comment="摄入重量（克）")
     calories = Column(Float, nullable=False, comment="摄入热量（kcal）")
     protein = Column(Float, nullable=False, comment="摄入蛋白质（g）")
     fat = Column(Float, nullable=False, comment="摄入脂肪（g）")
     carb = Column(Float, nullable=False, comment="摄入碳水（g）")
 
-    data_source = Column(SqlEnum(DataSourceEnum), nullable=False, default=DataSourceEnum.DATABASE, comment="营养数据来源")
+    data_source = Column(SqlEnum(DataSourceEnum, values_callable=lambda x: [e.value for e in x]), nullable=False, default=DataSourceEnum.DATABASE, comment="营养数据来源")
     note = Column(Text, nullable=True, comment="用户备注")
 
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")

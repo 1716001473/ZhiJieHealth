@@ -15,9 +15,18 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(50), unique=True, nullable=False, comment="用户名")
     password_hash = Column(String(200), nullable=False, comment="密码哈希")
+    openid = Column(String(100), unique=True, nullable=True, comment="微信 OpenID")
+    unionid = Column(String(100), unique=True, nullable=True, comment="微信 UnionID")
     nickname = Column(String(100), comment="昵称")
     avatar_url = Column(String(500), comment="头像URL")
     
+    # 健康档案基础数据（用于多端同步）
+    weight = Column(Float, comment="体重(kg)")
+    height = Column(Float, comment="身高(cm)")
+    age = Column(Integer, comment="年龄")
+    gender = Column(String(10), comment="性别: male/female")
+    activity = Column(String(20), comment="活动水平: low/medium/high")
+
     # 健康档案（用于个性化提醒）
     # 存储为逗号分隔的字符串，如 "糖尿病,高血压"
     health_conditions = Column(Text, comment="健康状况")
@@ -51,7 +60,7 @@ class RecognitionHistory(Base):
     __tablename__ = "recognition_history"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=False, comment="用户ID")
+    user_id = Column(Integer, index=True, nullable=False, comment="用户ID")
     
     # 识别信息
     image_url = Column(String(500), comment="原始图片地址")

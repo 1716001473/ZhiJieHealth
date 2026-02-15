@@ -17,6 +17,63 @@ class FoodService:
     
     def __init__(self, db: Session):
         self.db = db
+
+    # ------ 智能单位推断 ------
+    # 根据食物分类和名称，自动推断最合适的计量单位
+    UNIT_RULES = {
+        # category -> (default_unit, unit_weight)
+        "水果": ("个", 200),
+        "主食": ("碗", 200),
+        "饮品": ("杯", 250),
+        "汤类": ("碗", 300),
+        "零食": ("份", 50),
+    }
+
+    # 名称关键词 -> (default_unit, unit_weight)
+    KEYWORD_UNITS = {
+        # 水果类
+        "苹果": ("个", 200), "梨": ("个", 250), "橙": ("个", 200),
+        "桃": ("个", 200), "香蕉": ("根", 120), "猕猴桃": ("个", 100),
+        "橘": ("个", 100), "柚": ("瓣", 50), "芒果": ("个", 250),
+        "葡萄": ("串", 200), "草莓": ("颗", 15), "樱桃": ("颗", 10),
+        "荔枝": ("颗", 20), "龙眼": ("颗", 12), "枣": ("颗", 15),
+        "柿": ("个", 200), "李": ("个", 60), "杏": ("个", 50),
+        "西瓜": ("块", 300), "哈密瓜": ("块", 200),
+        # 主食
+        "米饭": ("碗", 200), "面条": ("碗", 250), "粥": ("碗", 300),
+        "馒头": ("个", 100), "包子": ("个", 100), "饺子": ("个", 20),
+        "面包": ("片", 40), "吐司": ("片", 40), "饼": ("张", 80),
+        "粽子": ("个", 150), "汤圆": ("个", 25), "烧卖": ("个", 30),
+        "春卷": ("个", 50),
+        # 蛋类
+        "鸡蛋": ("个", 60), "鸭蛋": ("个", 70), "鹌鹑蛋": ("个", 10),
+        # 饮品
+        "牛奶": ("杯", 250), "豆浆": ("杯", 250), "酸奶": ("杯", 200),
+        "咖啡": ("杯", 250), "茶": ("杯", 250), "果汁": ("杯", 250),
+        "可乐": ("杯", 330), "啤酒": ("杯", 330),
+        # 零食
+        "饼干": ("片", 10), "薯片": ("包", 50), "坚果": ("把", 25),
+        "巧克力": ("块", 20), "糖果": ("颗", 5),
+    }
+
+    def _infer_unit(self, name: str, category: str = None,
+                    serving_desc: str = None, serving_weight: int = None):
+        """根据食物信息推断智能单位"""
+        # 优先使用数据库中已有的 serving 信息
+        if serving_desc and serving_weight and serving_weight != 100:
+            return serving_desc, serving_weight
+
+        # 按名称关键词匹配
+        for keyword, (unit, weight) in self.KEYWORD_UNITS.items():
+            if keyword in name:
+                return unit, weight
+
+        # 按分类匹配
+        if category and category in self.UNIT_RULES:
+            return self.UNIT_RULES[category]
+
+        # 默认：按"份"算，100g 一份
+        return "份", 100
     
     def get_food_by_name(self, name: str) -> Optional[Food]:
         """根据名称查询食物"""
@@ -49,6 +106,11 @@ class FoodService:
         # 获取禁忌信息
         contraindications = self._get_contraindications(food)
         
+        # 推断智能单位
+        default_unit, unit_weight = self._infer_unit(
+            food.name, food.category, food.serving_desc, food.serving_weight
+        )
+        
         return FoodResponse(
             id=food.id,
             name=food.name,
@@ -59,6 +121,8 @@ class FoodService:
             nutrition=nutrition,
             serving_desc=food.serving_desc,
             serving_weight=food.serving_weight or 100,
+            default_unit=default_unit,
+            unit_weight=unit_weight,
             contraindications=contraindications,
             data_source="database",
             is_temp=False,
@@ -72,6 +136,8 @@ class FoodService:
             fat=temp.fat,
             carbohydrate=temp.carbohydrate,
         )
+        # 推断智能单位
+        default_unit, unit_weight = self._infer_unit(temp.name)
         return FoodResponse(
             id=temp.id,
             name=temp.name,
@@ -82,6 +148,8 @@ class FoodService:
             nutrition=nutrition,
             serving_desc=None,
             serving_weight=100,
+            default_unit=default_unit,
+            unit_weight=unit_weight,
             contraindications=[],
             data_source=temp.source,
             is_temp=True,

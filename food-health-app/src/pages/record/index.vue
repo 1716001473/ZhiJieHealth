@@ -10,9 +10,16 @@
         <view class="title">饮食记录</view>
       </view> 
       
-      <view class="date-picker">
-        <text class="date-text">{{ currentDateStr }}</text>
-        <text class="switch-date" @click="changeDate">切换日期</text>
+      <view class="date-picker-row">
+        <picker mode="date" :value="currentDateStr" @change="bindDateChange">
+          <view class="date-picker">
+            <text class="date-text">{{ currentDateStr }}</text>
+            <text class="switch-date">▼</text>
+          </view>
+        </picker>
+        <view class="today-btn" v-if="!isToday" @click="resetToToday">
+          回到今天
+        </view>
       </view>
       
       <view class="summary-card skeleton" v-if="loading">
@@ -113,32 +120,7 @@
     </view>
 
 
-    <view class="popup" v-if="editingRecord">
-      <view class="popup-mask" @click="cancelEditRecord"></view>
-      <view class="popup-content">
-        <view class="popup-header">
-          <text class="popup-title">编辑 {{ editingRecord.food_name }}</text>
-          <text class="popup-close" @click="cancelEditRecord">×</text>
-        </view>
-        <view class="form-item">
-          <text class="label">餐次</text>
-          <view class="tags">
-            <text
-              v-for="type in mealTypes"
-              :key="type.key"
-              class="tag"
-              :class="{ active: editMealType === type.key }"
-              @click="editMealType = type.key"
-            >{{ type.name }}</text>
-          </view>
-        </view>
-        <view class="form-item">
-          <text class="label">重量 (克)</text>
-          <input class="weight-input" type="number" v-model="editWeight" placeholder="100" />
-        </view>
-        <button class="confirm-btn" @click="confirmEditRecord">保存修改</button>
-      </view>
-    </view>
+
 
     <view class="meal-list" v-else>
       <view class="meal-group" :id="`meal-${type.key}`" v-for="type in mealTypes" :key="type.key">
@@ -171,6 +153,16 @@
       </view>
     </view>
 
+    <FoodEntryPopup
+      :visible="!!editingRecord"
+      :title="'编辑 ' + (editingRecord ? editingRecord.food_name : '')"
+      :foodName="editingRecord ? editingRecord.food_name : ''"
+      :initialWeight="editingRecord ? editingRecord.unit_weight : ''"
+      :initialMealType="editingRecord ? (editingRecord.meal_type || 'breakfast').toLowerCase() : 'breakfast'"
+      @update:visible="(val) => !val && cancelEditRecord()"
+      @confirm="handlePopupConfirm"
+    />
+
 
     <!-- 底部导航 -->
     <view class="bottom-nav">
@@ -194,268 +186,185 @@
   </view>
 </template>
 
-<script>
+<script setup lang="ts">
+import { ref, computed } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import { API_BASE_URL } from '@/config.js';
 import nutrition from '@/utils/nutrition';
-import reportUtils from '@/utils/report';
+import FoodEntryPopup from '@/components/FoodEntryPopup.vue';
+import { useMealStore } from '@/stores/meal';
+import type { MealRecord } from '@/types/meal';
 
-export default {
-  data() {
-    return {
-      currentDate: new Date(),
-      loading: false,
-      editingTarget: false,
-      targetCalories: null,
-      targetInput: '',
-      targetDateKey: '',
-      editingRecord: null,
-      editWeight: '',
-      editMealType: 'breakfast',
-      report: {
-        total: { calories: 0, protein: 0, fat: 0, carb: 0 },
-        recommended: { calories: 2000, protein: 75, fat: 66, carb: 275 },
-        carb_pct: 0, protein_pct: 0, fat_pct: 0,
-        records: []
-      },
-      mealTypes: [
-        { key: 'breakfast', name: '早餐', icon: '🌅' },
-        { key: 'lunch', name: '午餐', icon: '☀️' },
-        { key: 'dinner', name: '晚餐', icon: '🌙' },
-        { key: 'snack', name: '加餐', icon: '🍪' }
-      ]
-    }
-  },
-  onLoad() {
-    uni.$on('meal-record-updated', this.fetchData);
-    this.loadTargetCalories();
-  },
-  onUnload() {
-    uni.$off('meal-record-updated', this.fetchData);
-  },
-  computed: {
-    statusBarHeight() {
-        const sysInfo = uni.getSystemInfoSync();
-        return sysInfo.statusBarHeight || 20;
-    },
-    currentDateStr() {
-      return this.currentDate.toISOString().split('T')[0];
-    },
-    caloriePercent() {
-      const total = this.report.total.calories || 0;
-      const recommended = this.recommended.calories || 0;
-      if (!recommended) return 0;
-      const pct = (total / recommended) * 100;
-      return Math.min(100, Math.max(0, Math.round(pct)));
-    },
-    ringStyle() {
-      const color = nutrition.getRingColor(this.caloriePercent);
-      return {
-        background: `conic-gradient(${color} 0% ${this.caloriePercent}%, #E0E0E0 ${this.caloriePercent}% 100%)`
-      };
-    },
-    remainingCalories() {
-      let r = this.recommended.calories - this.report.total.calories;
-      return r > 0 ? r.toFixed(0) : 0;
-    },
-    recommended() {
-      if (this.targetCalories) {
-        return nutrition.calculateRecommendedMacros(this.targetCalories);
-      }
-      return this.report.recommended;
-    }
-  },
-  onShow() {
-    this.fetchData();
-  },
-  methods: {
-    getFoodImageUrl(url) {
-      if (!url) return '';
-      if (url.startsWith('http')) return url;
-      return API_BASE_URL + url;
-    },
-    async fetchData() {
-      const token = uni.getStorageSync('token');
-      if (!token) {
-        // Not logged in, skip fetch to avoid 401
-        return;
-      }
-      this.loading = true;
-      try {
-        const res = await uni.request({
-          url: `${API_BASE_URL}/api/v1/meal/daily-report`,
-          method: 'GET',
-          header: {
-            'Authorization': `Bearer ${token}`
-          },
-          data: {
-            date: this.currentDateStr
-          }
-        });
-        if(res.data && res.data.code === 0) {
-          this.report = reportUtils.normalizeReport(res.data.data);
-          this.scrollToLastMeal();
-        }
-      } catch (e) {
-        uni.showToast({ title: '加载失败', icon: 'none' });
-      } finally {
-        this.loading = false;
-      }
-    },
-    loadTargetCalories() {
-      const val = Number(uni.getStorageSync('targetCalories'));
-      const savedDate = uni.getStorageSync('targetCaloriesDate');
-      this.targetDateKey = this.currentDateStr;
-      if (savedDate && savedDate !== this.currentDateStr) {
-        uni.removeStorageSync('targetCalories');
-        uni.removeStorageSync('targetCaloriesDate');
-        this.targetCalories = null;
-        return;
-      }
-      if (val) {
-        this.targetCalories = val;
-      }
-    },
-    startEditTarget() {
-      this.targetInput = String(this.recommended.calories || 2000);
-      this.editingTarget = true;
-    },
-    cancelEditTarget() {
-      this.editingTarget = false;
-      this.targetInput = '';
-    },
-    saveTarget() {
-      const val = Number(this.targetInput);
-      if (!val || val < 800 || val > 6000) {
-        uni.showToast({ title: '请输入 800~6000 范围内的热量', icon: 'none' });
-        return;
-      }
-      this.targetCalories = val;
-      uni.setStorageSync('targetCalories', val);
-      uni.setStorageSync('targetCaloriesDate', this.currentDateStr);
-      this.editingTarget = false;
-      this.targetInput = '';
-    },
-    resetTarget() {
-      this.targetCalories = null;
-      uni.removeStorageSync('targetCalories');
-      uni.removeStorageSync('targetCaloriesDate');
-      this.editingTarget = false;
-      this.targetInput = '';
-    },
-    scrollToLastMeal() {
-      const key = uni.getStorageSync('lastMealType');
-      if (!key) return;
-      uni.removeStorageSync('lastMealType');
-      // 等待 loading=false 后 DOM 完全渲染再滚动
-      setTimeout(() => {
-        const selector = `#meal-${key}`;
-        uni.pageScrollTo({ selector, duration: 300 });
-      }, 350);
-    },
-    getPercent(val, max) {
-      return reportUtils.safePercent(val, max);
-    },
-    getMealItems(type) {
-      return this.report.records.filter(r => r.meal_type?.toLowerCase() === type.toLowerCase());
-    },
-    getMealCalories(type) {
-      const items = this.getMealItems(type);
-      const sum = items.reduce((acc, cur) => acc + cur.calories, 0);
-      return sum.toFixed(0);
-    },
-    navigateToAdd(type) {
-      uni.navigateTo({
-        url: `/pages/record/add?date=${this.currentDateStr}&type=${type}`
-      });
-    },
-    changeDate() {
-      // 简单实现：仅支持今天
-      uni.showToast({ title: '暂时只支持查看今日', icon: 'none' });
-    },
-    async deleteItem(id) {
-       uni.showModal({
-         title: '提示',
-         content: '确定删除这条记录吗？',
-         success: async (res) => {
-           if (res.confirm) {
-             try {
-                const res = await uni.request({
-                  url: `${API_BASE_URL}/api/v1/meal/record/${id}`,
-                  method: 'DELETE',
-                  header: {
-                    'Authorization': `Bearer ${uni.getStorageSync('token')}`
-                  }
-                });
-                if(res.data.code === 0) {
-                  this.fetchData();
-                }
-            } catch(e) {
-              uni.showToast({ title: '删除失败', icon: 'none' });
-            }
-          }
-        }
-      })
-   },
-    startEditRecord(item) {
-      this.editingRecord = item;
-      this.editWeight = String(item.unit_weight || 0);
-      this.editMealType = (item.meal_type || 'breakfast').toLowerCase();
-    },
-    cancelEditRecord() {
-      this.editingRecord = null;
-      this.editWeight = '';
-    },
-    async confirmEditRecord() {
-      const weight = Number(this.editWeight);
-      if (!weight || weight <= 0) {
-        uni.showToast({ title: '请输入有效重量', icon: 'none' });
-        return;
-      }
-      try {
-        const res = await uni.request({
-          url: `${API_BASE_URL}/api/v1/meal/record/${this.editingRecord.id}`,
-          method: 'PUT',
-          header: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${uni.getStorageSync('token')}`
-          },
-          data: {
-            unit_weight: weight,
-            meal_type: this.editMealType
-          }
-        });
-        if (res.data.code === 0) {
-          uni.showToast({ title: '已更新' });
-          this.editingRecord = null;
-          this.fetchData();
-        } else {
-          uni.showToast({ title: res.data.message || '更新失败', icon: 'none' });
-        }
-      } catch (e) {
-        uni.showToast({ title: '更新失败', icon: 'none' });
-      }
-    },
-    goBack() {
-        uni.navigateBack(); // 保留顶部返回，防止栈过深时无法退出
-    },
-    goHome() {
-        // 使用 reLaunch 清除栈，模拟 Tab 切换，避免页面无限叠加
-        uni.reLaunch({ url: '/pages/index/index' });
-    },
-    goHistory() {
-        uni.navigateTo({ url: '/pages/history/index' });
-    },
-    goProfile() {
-        uni.navigateTo({ url: '/pages/profile/index' });
-    },
-    goDietPlan() {
-        uni.navigateTo({ url: '/pages/plan/index' });
-    },
-    goRecipeList() {
-        uni.navigateTo({ url: '/pages/recipe/list' });
-    }
+// Store
+const mealStore = useMealStore();
+
+// UI State
+const editingTarget = ref(false);
+const targetInput = ref('');
+const targetDateKey = ref('');
+
+// Editing Record State
+const editingRecord = ref<MealRecord | null>(null);
+const editWeight = ref('');
+const editMealType = ref('breakfast');
+
+// Computed from Store
+const loading = computed(() => mealStore.loading);
+const report = computed(() => mealStore.report || {
+    date: currentDateStr.value,
+    total: { calories: 0, protein: 0, fat: 0, carb: 0 },
+    recommended: { calories: 2000, protein: 75, fat: 66, carb: 275 },
+    protein_pct: 0, fat_pct: 0, carb_pct: 0,
+    records: []
+});
+const currentDateStr = computed(() => mealStore.currentDate);
+const remainingCalories = computed(() => mealStore.remainingCalories);
+const recommended = computed(() => mealStore.currentRecommended);
+const caloriePercent = computed(() => mealStore.caloriePercent);
+
+const ringStyle = computed(() => {
+  const color = nutrition.getRingColor(caloriePercent.value);
+  // Ensure percent doesn't break CSS if > 100
+  const pct = Math.min(100, Math.max(0, caloriePercent.value));
+  return {
+    background: `conic-gradient(${color} 0% ${pct}%, #E0E0E0 ${pct}% 100%)`
+  };
+});
+
+const mealTypes = [
+  { key: 'breakfast', name: '早餐', icon: '🌅' },
+  { key: 'lunch', name: '午餐', icon: '☀️' },
+  { key: 'dinner', name: '晚餐', icon: '🌙' },
+  { key: 'snack', name: '加餐', icon: '🍪' }
+];
+
+const statusBarHeight = computed(() => {
+    const sysInfo = uni.getSystemInfoSync();
+    return sysInfo.statusBarHeight || 20;
+});
+
+// Lifecycle
+onShow(() => {
+  mealStore.fetchDailyReport();
+});
+
+// Methods
+const getFoodImageUrl = (url: string | null | undefined) => {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  return API_BASE_URL + url;
+};
+
+const getPercent = (val: number | undefined, max: number | undefined) => {
+    // Basic calculation, or use util if needed. Store has safe logic for ring but bars need it too.
+    const v = val || 0;
+    const m = max || 0;
+    if (!m) return 0;
+    const pct = (v / m) * 100;
+    return Math.min(100, Math.max(0, Math.round(pct)));
+};
+
+// Store wrappers
+const getMealItems = (type: string) => mealStore.getMealItems(type);
+const getMealCalories = (type: string) => mealStore.getMealCalories(type);
+
+const navigateToAdd = (type: string) => {
+  uni.navigateTo({
+    url: `/pages/record/add?date=${currentDateStr.value}&type=${type}`
+  });
+};
+
+const bindDateChange = (e: any) => {
+    mealStore.setDate(e.detail.value);
+};
+
+const isToday = computed(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return currentDateStr.value === today;
+});
+
+const resetToToday = () => {
+    const today = new Date().toISOString().split('T')[0];
+    mealStore.setDate(today);
+};
+
+// Target Calories Logic
+const startEditTarget = () => {
+  targetInput.value = String(recommended.value.calories || 2000);
+  editingTarget.value = true;
+};
+
+const cancelEditTarget = () => {
+  editingTarget.value = false;
+  targetInput.value = '';
+};
+
+const saveTarget = () => {
+  const val = Number(targetInput.value);
+  if (!val || val < 800 || val > 6000) {
+    uni.showToast({ title: '请输入 800~6000 范围内的热量', icon: 'none' });
+    return;
   }
-}
+  mealStore.setTargetCalories(val);
+  editingTarget.value = false;
+  targetInput.value = '';
+};
+
+const resetTarget = () => {
+  mealStore.setTargetCalories(null);
+  editingTarget.value = false;
+  targetInput.value = '';
+};
+
+// Edit Record Logic
+const startEditRecord = (item: MealRecord) => {
+  editingRecord.value = item;
+  editWeight.value = String(item.unit_weight || 0);
+  editMealType.value = (item.meal_type || 'breakfast').toLowerCase();
+};
+
+const cancelEditRecord = () => {
+  editingRecord.value = null;
+  editWeight.value = '';
+};
+
+const handlePopupConfirm = async ({ weight, mealType }: { weight: string, mealType: string }) => {
+  const numWeight = Number(weight);
+  if (!numWeight || numWeight <= 0) {
+    uni.showToast({ title: '请输入有效重量', icon: 'none' });
+    return;
+  }
+  
+  if (editingRecord.value) {
+      const success = await mealStore.updateRecord(editingRecord.value.id, {
+        unit_weight: numWeight,
+        meal_type: mealType
+      });
+      if (success) {
+          editingRecord.value = null;
+      }
+  }
+};
+
+const deleteItem = (id: number) => {
+   uni.showModal({
+     title: '提示',
+     content: '确定删除这条记录吗？',
+     success: async (res) => {
+       if (res.confirm) {
+         await mealStore.deleteRecord(id);
+       }
+    }
+  })
+};
+
+// Navigation
+const goBack = () => uni.navigateBack();
+const goHome = () => uni.reLaunch({ url: '/pages/index/index' });
+const goHistory = () => uni.navigateTo({ url: '/pages/history/index' });
+const goProfile = () => uni.navigateTo({ url: '/pages/profile/index' });
+const goDietPlan = () => uni.navigateTo({ url: '/pages/plan/index' });
+const goRecipeList = () => uni.navigateTo({ url: '/pages/recipe/list' });
 </script>
 
 <style>
@@ -492,12 +401,26 @@ export default {
   font-weight: bold;
 }
 
-.date-picker {
-  padding: 0 15px;
+.date-picker-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  padding: 0 15px;
   margin-bottom: 20px;
+}
+
+.date-picker {
+  display: flex;
+  align-items: center;
+}
+
+.today-btn {
+  font-size: 12px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 4px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 .date-text {
@@ -868,79 +791,7 @@ export default {
   padding: 10px 0;
 }
 
-.popup {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  z-index: 999;
-}
 
-.popup-mask {
-  width: 100%; height: 100%;
-  background-color: rgba(0,0,0,0.5);
-}
-
-.popup-content {
-  position: absolute;
-  bottom: 0; left: 0; width: 100%;
-  background-color: #fff;
-  border-top-left-radius: 12px;
-  border-top-right-radius: 12px;
-  padding: 20px;
-  box-sizing: border-box;
-}
-
-.popup-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.popup-title {
-  font-size: 18px;
-  font-weight: bold;
-}
-
-.popup-close {
-  font-size: 18px;
-  color: #999;
-}
-
-.form-item {
-  margin-bottom: 20px;
-}
-
-.tags {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.tag {
-  padding: 6px 12px;
-  background-color: #f0f0f0;
-  border-radius: 15px;
-  font-size: 12px;
-  color: #666;
-}
-
-.tag.active {
-  background-color: #E8F5E9;
-  color: #4CAF50;
-  border: 1px solid #4CAF50;
-}
-
-.weight-input {
-  background-color: #f9f9f9;
-  padding: 10px;
-  border-radius: 6px;
-  font-size: 16px;
-}
-
-.confirm-btn {
-  background-color: #4CAF50;
-  color: #fff;
-  border-radius: 25px;
-}
 
 .bottom-nav {
   position: fixed;

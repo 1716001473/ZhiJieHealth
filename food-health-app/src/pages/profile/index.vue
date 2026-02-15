@@ -135,7 +135,7 @@ const todayReport = ref<any>(null)
 const profileProgress = ref(0)
 const healthFocus = ref('完善健康档案，获取个性化建议')
 
-onShow(() => {
+onShow(async () => {
   // 从本地存储获取用户信息
   const storedUser = uni.getStorageSync('user')
   if (storedUser) {
@@ -143,10 +143,34 @@ onShow(() => {
   } else {
     user.value = null
   }
+  // 先使用本地缓存
   const storedProfile = uni.getStorageSync('healthProfile') || {}
   profileProgress.value = healthProfile.calcProfileCompletion(storedProfile)
   healthFocus.value = healthProfile.getHealthFocusMessage(storedProfile)
   loadTodayReport()
+
+  // 再从后端异步同步最新数据
+  try {
+    const res = await request({ url: `${API_BASE_URL}/api/v1/health/profile`, method: 'GET', silentAuth: true })
+    if (res.statusCode === 200 && (res.data as any)?.code === 0) {
+      const data = (res.data as any).data
+      if (data && (data.weight || data.height || data.age || data.gender)) {
+        const serverProfile = {
+          ...storedProfile,
+          weight: data.weight || storedProfile.weight,
+          height: data.height || storedProfile.height,
+          age: data.age || storedProfile.age,
+          gender: data.gender || storedProfile.gender,
+          activity: data.activity || storedProfile.activity,
+        }
+        uni.setStorageSync('healthProfile', serverProfile)
+        profileProgress.value = healthProfile.calcProfileCompletion(serverProfile)
+        healthFocus.value = healthProfile.getHealthFocusMessage(serverProfile)
+      }
+    }
+  } catch (e) {
+    // 网络失败时使用本地缓存
+  }
 })
 
 const loadTodayReport = async () => {
@@ -237,6 +261,13 @@ const handleLogout = () => {
       if (res.confirm) {
         uni.removeStorageSync('token')
         uni.removeStorageSync('user')
+        // 清除用户相关的所有缓存，防止切换账号数据残留
+        uni.removeStorageSync('healthProfile')
+        uni.removeStorageSync('healthAdvice')
+        uni.removeStorageSync('planSignature')
+        uni.removeStorageSync('planNeedsUpdate')
+        uni.removeStorageSync('userPreference')
+        
         user.value = null
         uni.showToast({ title: '已退出登录', icon: 'success' })
       }
@@ -245,7 +276,7 @@ const handleLogout = () => {
 }
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 .container {
   min-height: 100vh;
   background: #F5F5F5;

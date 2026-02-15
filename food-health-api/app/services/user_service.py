@@ -3,12 +3,9 @@
 用户服务
 """
 import hashlib
-import hmac
-import json
-import base64
-import time
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 
 from app.models.user import User, RecognitionHistory
@@ -19,77 +16,54 @@ from app.config import get_settings
 
 settings = get_settings()
 
+from passlib.context import CryptContext
+
+# 配置密码哈希上下文，使用 bcrypt 算法
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 def hash_password(password: str) -> str:
-    """密码哈希（简单实现，生产环境用 bcrypt）"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """密码哈希（使用 bcrypt）"""
+    return pwd_context.hash(password)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    """验证密码"""
-    return hash_password(password) == password_hash
+    """
+    验证密码
+    兼容旧的 SHA256 哈希（无缝迁移）
+    """
+    # 1. 检查是否为旧的 SHA256 哈希 (64位 hex 字符串，且不包含 $ 分隔符)
+    if len(password_hash) == 64 and "$" not in password_hash:
+        # 手动验证旧哈希
+        is_valid = hashlib.sha256(password.encode()).hexdigest() == password_hash
+        return is_valid
+
+    # 2. 验证 bcrypt 哈希
+    return pwd_context.verify(password, password_hash)
 
 
-def _base64_encode(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).decode('utf-8').rstrip('=')
-
-
-def _base64_decode(data: str) -> bytes:
-    padding = '=' * (4 - (len(data) % 4))
-    return base64.urlsafe_b64decode(data + padding)
+ALGORITHM = "HS256"
 
 
 def generate_token(user_id: int) -> str:
-    """生成无状态访问令牌 (HMAC签名)"""
-    header = {"alg": "HS256", "typ": "JWT"}
-    payload = {
-        "sub": user_id,
-        "exp": int(time.time()) + settings.access_token_expire_days * 24 * 3600,
-        "iat": int(time.time())
+    """生成标准 JWT 访问令牌"""
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.access_token_expire_days)
+    to_encode = {
+        "sub": str(user_id),
+        "exp": expire,
+        "iat": datetime.now(timezone.utc)
     }
-    
-    header_b64 = _base64_encode(json.dumps(header).encode('utf-8'))
-    payload_b64 = _base64_encode(json.dumps(payload).encode('utf-8'))
-    
-    message = f"{header_b64}.{payload_b64}"
-    signature = hmac.new(
-        settings.secret_key.encode('utf-8'),
-        message.encode('utf-8'),
-        hashlib.sha256
-    ).digest()
-    
-    signature_b64 = _base64_encode(signature)
-    
-    return f"{message}.{signature_b64}"
-
+    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
+    return encoded_jwt
 
 def verify_token(token: str) -> Optional[int]:
     """验证令牌，返回 user_id"""
     try:
-        parts = token.split('.')
-        if len(parts) != 3:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
             return None
-            
-        header_b64, payload_b64, signature_b64 = parts
-        
-        message = f"{header_b64}.{payload_b64}"
-        expected_signature = hmac.new(
-            settings.secret_key.encode('utf-8'),
-            message.encode('utf-8'),
-            hashlib.sha256
-        ).digest()
-        
-        if not hmac.compare_digest(_base64_encode(expected_signature), signature_b64):
-            return None
-            
-        payload = json.loads(_base64_decode(payload_b64).decode('utf-8'))
-        
-        # 检查过期时间
-        if payload.get("exp", 0) < time.time():
-            return None
-            
-        return payload.get("sub")
-        
-    except Exception:
+        return int(user_id)
+    except JWTError:
         return None
 
 
@@ -126,6 +100,11 @@ class UserService:
         if not verify_password(password, user.password_hash):
             return None
         
+        # 自动迁移：如果是旧的 SHA256 哈希，登录成功后自动升级为 bcrypt
+        if len(user.password_hash) == 64 and "$" not in user.password_hash:
+            user.password_hash = hash_password(password)
+            self.db.commit()
+            
         return user
     
     def get_user_by_id(self, user_id: int) -> Optional[User]:
@@ -165,12 +144,45 @@ class UserService:
             username=user.username,
             nickname=user.nickname,
             avatar_url=user.avatar_url,
+            weight=user.weight,
+            height=user.height,
+            age=user.age,
+            gender=user.gender,
+            activity=user.activity,
             health_conditions=user.get_health_conditions_list(),
             allergies=user.get_allergies_list(),
             health_goal=user.health_goal,
             dietary_preferences=user.dietary_preferences,
             created_at=user.created_at,
         )
+
+    def get_user_by_openid(self, openid: str) -> Optional[User]:
+        """根据 OpenID 获取用户"""
+        return self.db.query(User).filter(User.openid == openid).first()
+
+    def create_wechat_user(self, openid: str, unionid: Optional[str] = None, user_info: Optional[dict] = None) -> User:
+        """创建微信用户"""
+        import uuid
+        # 生成随机用户名和密码
+        random_suffix = uuid.uuid4().hex[:8]
+        username = f"wx_{random_suffix}"
+        password = uuid.uuid4().hex
+        
+        nickname = user_info.get("nickName") if user_info else f"用户_{random_suffix[:4]}"
+        avatar_url = user_info.get("avatarUrl") if user_info else None
+
+        user = User(
+            username=username,
+            password_hash=hash_password(password),
+            nickname=nickname,
+            avatar_url=avatar_url,
+            openid=openid,
+            unionid=unionid
+        )
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
 
 
 class HistoryService:

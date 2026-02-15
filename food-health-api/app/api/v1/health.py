@@ -2,7 +2,9 @@
 """
 健康建议 API 路由
 """
+from typing import Optional
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from app.schemas.response import APIResponse
 from app.schemas.health import HealthAdviceRequest, HealthAdviceResponse
@@ -17,6 +19,91 @@ from fastapi import Depends
 from datetime import date, timedelta, datetime
 
 router = APIRouter()
+
+
+# ========== 健康档案（多端同步） ==========
+
+class HealthProfileRequest(BaseModel):
+    """健康档案更新请求"""
+    weight: Optional[float] = None
+    height: Optional[float] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    activity: Optional[str] = None
+
+
+class HealthProfileResponse(BaseModel):
+    """健康档案响应"""
+    weight: Optional[float] = None
+    height: Optional[float] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    activity: Optional[str] = None
+
+
+
+@router.get("/health/profile", response_model=APIResponse[HealthProfileResponse])
+async def get_health_profile(
+    db: Session = Depends(get_db),
+    user_id: int = Depends(require_login)
+):
+    """
+    获取健康档案
+
+    返回用户的健康档案基础数据（体重、身高、年龄、性别、活动水平）
+    """
+    from app.models.user import User
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return APIResponse.error(message="用户不存在")
+
+    return APIResponse.success(HealthProfileResponse(
+        weight=user.weight,
+        height=user.height,
+        age=user.age,
+        gender=user.gender,
+        activity=user.activity,
+    ))
+
+
+@router.put("/health/profile", response_model=APIResponse[HealthProfileResponse])
+async def update_health_profile(
+    payload: HealthProfileRequest,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(require_login)
+):
+    """
+    更新健康档案
+
+    保存用户的健康档案基础数据，支持多端同步
+    """
+    from app.models.user import User
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return APIResponse.error(message="用户不存在")
+
+    # 仅更新传入的非 None 字段
+    if payload.weight is not None:
+        user.weight = payload.weight
+    if payload.height is not None:
+        user.height = payload.height
+    if payload.age is not None:
+        user.age = payload.age
+    if payload.gender is not None:
+        user.gender = payload.gender
+    if payload.activity is not None:
+        user.activity = payload.activity
+
+    db.commit()
+    db.refresh(user)
+
+    return APIResponse.success(HealthProfileResponse(
+        weight=user.weight,
+        height=user.height,
+        age=user.age,
+        gender=user.gender,
+        activity=user.activity,
+    ))
 
 
 def calc_bmi(weight: float, height: float) -> float:

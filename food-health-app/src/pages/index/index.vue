@@ -1,5 +1,6 @@
 <template>
   <view class="container">
+    <PrivacyPopup />
     <!-- 顶部渐变背景 -->
     <view class="header">
       <view class="header-content">
@@ -119,6 +120,7 @@ import { API_BASE_URL } from '@/config.js'
 import { buildChooseImageOptions } from '@/utils/imageSelect.js'
 import { request } from '@/utils/http'
 import reportUtils from '@/utils/report.js'
+import PrivacyPopup from '@/components/PrivacyPopup.vue'
 
 // API 地址配置
 const API_BASE = API_BASE_URL

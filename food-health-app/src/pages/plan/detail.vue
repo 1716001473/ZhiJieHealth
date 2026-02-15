@@ -2,7 +2,7 @@
   <view class="container" v-if="plan">
     <!-- Header Image -->
     <view class="banner">
-      <image :src="plan.cover_image || '/static/default_food.png'" mode="aspectFill" class="banner-img" />
+      <image :src="planCover" mode="aspectFill" class="banner-img" />
       <view class="banner-overlay"></view>
       <view class="banner-content">
         <text class="plan-title">{{ plan.name }}</text>
@@ -93,11 +93,24 @@
 import { ref, computed, onMounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { API_BASE_URL } from '@/config.js'
+import { request } from '@/utils/http'
 
 const plan = ref<any>(null)
 const currentDay = ref(1)
 const loading = ref(true)
 const statusBarHeight = ref(20)
+
+const planCover = computed(() => {
+  if (!plan.value || !plan.value.cover_image) {
+    return 'https://images.unsplash.com/photo-1543353071-873f17a7a088?q=80&w=800&auto=format&fit=crop'
+  }
+  // 修复后端返回的本地不存在的静态资源路径
+  if (plan.value.cover_image.includes('/static/ai_plan.png') || 
+      plan.value.cover_image.includes('/static/mock_plan.png')) {
+    return 'https://images.unsplash.com/photo-1543353071-873f17a7a088?q=80&w=800&auto=format&fit=crop'
+  }
+  return plan.value.cover_image
+})
 
 onLoad((options) => {
   const sysInfo = uni.getSystemInfoSync()
@@ -114,7 +127,7 @@ const currentDayData = computed(() => {
 
 const loadPlanDetail = async (id: string) => {
   try {
-    const res: any = await uni.request({
+    const res: any = await request({
       url: `${API_BASE_URL}/api/v1/plans/${id}`,
       method: 'GET'
     })
@@ -179,12 +192,9 @@ const applyPlan = () => {
         uni.showLoading({ title: '应用中...' })
         try {
           const today = new Date().toISOString().split('T')[0]
-          const res: any = await uni.request({
+          const res: any = await request({
             url: `${API_BASE_URL}/api/v1/plans/${plan.value.id}/apply`,
             method: 'POST',
-            header: {
-                'Authorization': `Bearer ${uni.getStorageSync('token')}`
-            },
             data: {
               day_index: currentDay.value,
               target_date: today

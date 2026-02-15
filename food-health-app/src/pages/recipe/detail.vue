@@ -150,7 +150,10 @@
     <!-- 添加饮食弹窗 -->
     <view class="popup-mask" v-if="showMealPopup" @click="showMealPopup = false">
       <view class="popup-content" @click.stop>
-        <text class="popup-title">添加到饮食记录</text>
+        <view class="popup-header">
+          <text class="popup-title">添加到饮食记录</text>
+          <text class="popup-close" @click="showMealPopup = false">×</text>
+        </view>
         <text class="popup-recipe-name">{{ recipe.name }}</text>
 
         <!-- 餐次选择 -->
@@ -170,21 +173,34 @@
           </view>
         </view>
 
-        <!-- 份数选择 -->
-        <view class="servings-section">
-          <text class="popup-label">份数</text>
-          <view class="servings-row">
-            <view class="servings-control">
-              <view class="servings-btn" @click="changeServings(-1)">
-                <text class="servings-btn-text">−</text>
-              </view>
-              <text class="servings-value">{{ selectedServings }}</text>
-              <view class="servings-btn" @click="changeServings(1)">
-                <text class="servings-btn-text">+</text>
-              </view>
-            </view>
-            <text class="servings-cal">约 {{ Math.round((recipe.calories || 0) * selectedServings) }} kcal</text>
+        <!-- 数量选择（统一智能单位模式） -->
+        <view class="quantity-section">
+          <view class="quantity-header">
+            <text class="popup-label">数量</text>
+            <text class="unit-switch" @click="toggleInputMode">{{ useGramMode ? '切换为智能单位' : '切换为克数输入' }}</text>
           </view>
+
+          <!-- 智能单位模式 -->
+          <view class="quantity-row" v-if="!useGramMode">
+            <view class="quantity-control">
+              <view class="quantity-btn" @click="changeQuantity(-1)"><text>−</text></view>
+              <text class="quantity-value">{{ popupQuantity }}</text>
+              <text class="quantity-unit">{{ popupUnitLabel }}</text>
+              <view class="quantity-btn" @click="changeQuantity(1)"><text>+</text></view>
+            </view>
+            <text class="quantity-weight">≈ {{ popupTotalWeight }}g</text>
+          </view>
+
+          <!-- 克数输入模式 -->
+          <view class="gram-row" v-else>
+            <input class="gram-input" type="number" v-model="popupGrams" placeholder="100" />
+            <text class="gram-label">克</text>
+          </view>
+        </view>
+
+        <!-- 热量预览 -->
+        <view class="calorie-preview">
+          <text class="calorie-preview-text">约 {{ popupCalories }} 千卡</text>
         </view>
 
         <!-- 确认按钮 -->
@@ -197,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { API_BASE_URL } from '@/config.js'
 import defaultImg from '@/static/logo.png'
 
@@ -341,8 +357,14 @@ const goBack = () => {
 // ========== 添加到饮食记录 ==========
 const showMealPopup = ref(false)
 const selectedMealType = ref('lunch')
-const selectedServings = ref(1)
 const submitting = ref(false)
+
+// 智能单位相关状态
+const popupQuantity = ref(1)
+const popupUnitLabel = ref('份')
+const popupUnitWeight = ref(100)
+const useGramMode = ref(false)
+const popupGrams = ref('100')
 
 const mealTypes = [
   { value: 'breakfast', label: '早餐', icon: '🌅' },
@@ -350,6 +372,36 @@ const mealTypes = [
   { value: 'dinner', label: '晚餐', icon: '🌙' },
   { value: 'snack', label: '加餐', icon: '🍪' },
 ]
+
+// 食谱名称关键词 -> 智能单位推断
+const RECIPE_UNIT_MAP: Record<string, [string, number]> = {
+  '米饭': ['碗', 200], '面条': ['碗', 250], '粥': ['碗', 300],
+  '汤': ['碗', 300], '羚': ['碗', 300],
+  '馒头': ['个', 100], '包子': ['个', 100], '饺子': ['个', 20],
+  '饼': ['张', 80], '粽子': ['个', 150],
+  '沙拉': ['份', 200], '三明治': ['个', 150],
+  '牛排': ['块', 200], '鸡胸': ['块', 150],
+  '蛋': ['个', 60], '鸡蛋': ['个', 60],
+  '牛奶': ['杯', 250], '豆浆': ['杯', 250], '果汁': ['杯', 250],
+}
+
+const inferRecipeUnit = (foodName: string): [string, number] => {
+  for (const [keyword, unitInfo] of Object.entries(RECIPE_UNIT_MAP)) {
+    if (foodName.includes(keyword)) return unitInfo
+  }
+  return ['份', 100]
+}
+
+// 计算属性
+const popupTotalWeight = computed(() => {
+  if (useGramMode.value) return Number(popupGrams.value) || 0
+  return Math.round(popupQuantity.value * popupUnitWeight.value)
+})
+
+const popupCalories = computed(() => {
+  const cal = recipe.value.calories || 0
+  return ((cal * popupTotalWeight.value) / 100).toFixed(0)
+})
 
 const showAddMealPopup = () => {
   const token = uni.getStorageSync('token')
@@ -364,13 +416,29 @@ const showAddMealPopup = () => {
   else if (hour < 20) selectedMealType.value = 'dinner'
   else selectedMealType.value = 'snack'
 
-  selectedServings.value = 1
+  // 推断智能单位
+  const foodName = recipe.value.name || ''
+  const [unit, weight] = inferRecipeUnit(foodName)
+  popupUnitLabel.value = unit
+  popupUnitWeight.value = weight
+  popupQuantity.value = 1
+  popupGrams.value = String(weight)
+  useGramMode.value = false
   showMealPopup.value = true
 }
 
-const changeServings = (delta: number) => {
-  const next = selectedServings.value + delta
-  if (next >= 1 && next <= 10) selectedServings.value = next
+const changeQuantity = (delta: number) => {
+  const next = popupQuantity.value + delta
+  if (next >= 1 && next <= 20) popupQuantity.value = next
+}
+
+const toggleInputMode = () => {
+  useGramMode.value = !useGramMode.value
+  if (useGramMode.value) {
+    popupGrams.value = String(popupTotalWeight.value)
+  } else {
+    popupQuantity.value = Math.max(1, Math.round(Number(popupGrams.value) / popupUnitWeight.value))
+  }
 }
 
 const confirmAddMeal = async () => {
@@ -379,12 +447,11 @@ const confirmAddMeal = async () => {
     const token = uni.getStorageSync('token')
     const today = new Date().toISOString().split('T')[0]
 
-    // 将"一份"映射为 100g 基准，份数 * 100 = unit_weight
     const payload = {
       meal_date: today,
       meal_type: selectedMealType.value,
       food_name: recipe.value.name,
-      unit_weight: 100 * selectedServings.value,
+      unit_weight: popupTotalWeight.value,
       image_url: recipe.value.image_url || null,
       data_source: 'user_custom',
       per_100g_calories: recipe.value.calories || 0,
@@ -870,24 +937,49 @@ const confirmAddMeal = async () => {
   font-weight: 600;
 }
 
-/* 份数选择 */
-.servings-section {
-  margin-bottom: 40rpx;
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.servings-row {
+.popup-close {
+  font-size: 44rpx;
+  color: #999;
+  padding: 0 8rpx;
+  line-height: 1;
+}
+
+/* 数量选择（统一智能单位模式） */
+.quantity-section {
+  margin-bottom: 24rpx;
+}
+
+.quantity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.unit-switch {
+  font-size: 24rpx;
+  color: #4CAF50;
+}
+
+.quantity-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.servings-control {
+.quantity-control {
   display: flex;
   align-items: center;
   gap: 24rpx;
 }
 
-.servings-btn {
+.quantity-btn {
   width: 64rpx;
   height: 64rpx;
   border-radius: 50%;
@@ -895,31 +987,60 @@ const confirmAddMeal = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 36rpx;
+  color: #333;
 
   &:active {
     background: #E0E0E0;
   }
 }
 
-.servings-btn-text {
-  font-size: 36rpx;
-  color: #333;
-  font-weight: bold;
-  line-height: 1;
-}
-
-.servings-value {
-  font-size: 40rpx;
+.quantity-value {
+  font-size: 44rpx;
   font-weight: bold;
   color: #333;
-  min-width: 60rpx;
+  min-width: 40rpx;
   text-align: center;
 }
 
-.servings-cal {
+.quantity-unit {
   font-size: 28rpx;
-  color: #FF9800;
+  color: #666;
+}
+
+.quantity-weight {
+  font-size: 26rpx;
+  color: #999;
+}
+
+.gram-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.gram-input {
+  flex: 1;
+  background: #f9f9f9;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  font-size: 32rpx;
+}
+
+.gram-label {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.calorie-preview {
+  text-align: right;
+  margin-bottom: 24rpx;
+}
+
+.calorie-preview-text {
+  font-size: 32rpx;
   font-weight: 600;
+  color: #4CAF50;
 }
 
 /* 确认按钮 */
@@ -935,5 +1056,6 @@ const confirmAddMeal = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-top: 8rpx;
 }
 </style>

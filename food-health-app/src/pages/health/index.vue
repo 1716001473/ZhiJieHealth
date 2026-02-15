@@ -193,6 +193,31 @@ const healthFocus = ref(healthProfile.getHealthFocusMessage(profile.value))
 const advice = ref<any>(uni.getStorageSync('healthAdvice') || {})
 const adviceUpdatedAt = ref(advice.value?.updatedAt || '')
 
+// 从后端加载健康档案
+const loadProfileFromServer = async () => {
+  try {
+    const res = await request({ url: `${API_BASE_URL}/api/v1/health/profile`, method: 'GET' })
+    if (res.statusCode === 200 && (res.data as any)?.code === 0) {
+      const data = (res.data as any).data
+      if (data) {
+        const serverProfile = {
+          weight: data.weight || profile.value.weight,
+          height: data.height || profile.value.height,
+          age: data.age || profile.value.age,
+          gender: data.gender || profile.value.gender,
+          activity: data.activity || profile.value.activity,
+        }
+        profile.value = serverProfile
+        uni.setStorageSync('healthProfile', serverProfile)
+        progress.value = healthProfile.calcProfileCompletion(serverProfile)
+        healthFocus.value = healthProfile.getHealthFocusMessage(serverProfile)
+      }
+    }
+  } catch (e) {
+    // 网络失败时使用本地缓存，静默处理
+  }
+}
+
 // 图表数据类型
 interface ChartDataItem {
   label: string
@@ -279,6 +304,7 @@ const saveProfile = async () => {
   const nextProfile = { ...profile.value }
   const hasChanged = hasPlanProfileChanged(prevProfile, prevUser, nextProfile, prevUser)
 
+  // 保存到本地缓存
   uni.setStorageSync('healthProfile', profile.value)
   if (hasChanged) {
     uni.setStorageSync('planNeedsUpdate', true)
@@ -286,8 +312,25 @@ const saveProfile = async () => {
   progress.value = healthProfile.calcProfileCompletion(profile.value)
   healthFocus.value = healthProfile.getHealthFocusMessage(profile.value)
   fetchAdvice()
+
+  // 同步健康档案到后端（核心改动）
+  try {
+    await request({
+      url: `${API_BASE_URL}/api/v1/health/profile`,
+      method: 'PUT',
+      data: {
+        weight: profile.value.weight || null,
+        height: profile.value.height || null,
+        age: profile.value.age || null,
+        gender: profile.value.gender || null,
+        activity: profile.value.activity || null,
+      }
+    })
+  } catch (e) {
+    console.warn('⚠️ 同步健康档案到后端失败:', e)
+  }
   
-  // 同步体重到后端
+  // 同步体重到后端体重记录表
   if (profile.value.weight) {
     try {
       const weightRes = await request({
@@ -296,19 +339,13 @@ const saveProfile = async () => {
         data: profile.value
       })
 
-      // 检查保存结果
       if (weightRes.statusCode === 200 && weightRes.data?.code === 0) {
-        // 刷新图表数据（如果在健康数据tab）
         if (activeTab.value === 'health') {
           await fetchChartsData()
         }
-      } else {
-        console.warn('⚠️ 体重保存失败:', weightRes.data?.message || '未知错误')
       }
     } catch (e) {
-      console.error('❌ 同步体重异常:', e)
-      // 用户可能未登录或网络错误
-      // 不影响本地保存，静默处理
+      // 静默处理
     }
   }
 
@@ -386,7 +423,10 @@ const fetchChartsData = async () => {
   await fetchNutritionData()
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 从后端加载健康档案（优先后端数据）
+  await loadProfileFromServer()
+
   if (!advice.value?.diet) {
     persistAdvice({
       diet: localAdvice.value.diet,
@@ -394,9 +434,6 @@ onMounted(() => {
       source: 'local'
     })
   }
-  // if (profile.value?.weight && profile.value?.height) {
-  //   fetchAdvice()
-  // }
   
   // 加载报表数据
   fetchChartsData()

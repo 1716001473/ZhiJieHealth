@@ -31,17 +31,8 @@
       <view class="batch-item" v-for="item in selectedItems" :key="item.key">
         <view class="batch-main">
           <text class="batch-name">{{ item.name }}</text>
-          <view class="batch-meal-tags">
-            <text
-              v-for="type in mealTypes"
-              :key="type.key"
-              class="tag"
-              :class="{ active: item.meal_type === type.key }"
-              @click="item.meal_type = type.key"
-            >{{ type.name }}</text>
-          </view>
+          <text class="batch-sub">{{ item.quantity }} {{ item.unitLabel }} ≈ {{ item.totalWeight }}g</text>
         </view>
-        <input class="batch-weight" type="number" v-model="item.weight" placeholder="克数" />
         <text class="batch-remove" @click="removeBatchItem(item.key)">×</text>
       </view>
       <button class="batch-btn" @click="confirmBatchAdd">批量添加</button>
@@ -74,50 +65,64 @@
       </view>
     </scroll-view>
     
-    <!-- 添加弹窗 -->
+    <!-- 统一添加弹窗 -->
     <view class="popup" v-if="selectedFood">
       <view class="popup-mask" @click="selectedFood = null"></view>
       <view class="popup-content">
         <view class="popup-header">
-          <text class="title">添加 {{ selectedFood.name }}</text>
+          <text class="popup-title">添加到饮食记录</text>
           <text class="close" @click="selectedFood = null">×</text>
         </view>
-        
-        <view class="form-item">
-          <text class="label">餐次</text>
-          <view class="tags">
-            <text 
-              v-for="type in mealTypes" 
-              :key="type.key"
-              class="tag"
+        <text class="popup-food-name">{{ selectedFood.name }}</text>
+
+        <!-- 餐次选择 -->
+        <view class="meal-type-section">
+          <text class="popup-label">选择餐次</text>
+          <view class="meal-type-options">
+            <view
+              v-for="type in mealTypesWithIcon" :key="type.key"
+              class="meal-type-item"
               :class="{ active: currentMealType === type.key }"
               @click="currentMealType = type.key"
-            >{{ type.name }}</text>
+            >
+              <text class="mt-icon">{{ type.icon }}</text>
+              <text class="mt-label">{{ type.name }}</text>
+            </view>
           </view>
-        </view>
-        
-        <view class="form-item">
-          <text class="label">重量 (克)</text>
-          <input class="weight-input" type="number" v-model="weight" placeholder="100" />
         </view>
 
-        <view class="form-item">
-          <text class="label">餐具估算</text>
-          <view class="tags">
-            <text 
-              v-for="dish in dishSizes"
-              :key="dish.name"
-              class="tag"
-              :class="{ active: selectedDish === dish.name }"
-              @click="applyDishWeight(dish)"
-            >{{ dish.name }}</text>
+        <!-- 数量选择 -->
+        <view class="quantity-section">
+          <view class="quantity-header">
+            <text class="popup-label">数量</text>
+            <text class="unit-switch" @click="toggleInputMode">
+              {{ useGramMode ? '切换为智能单位' : '切换为克数输入' }}
+            </text>
+          </view>
+
+          <!-- 智能单位模式 -->
+          <view class="quantity-row" v-if="!useGramMode">
+            <view class="quantity-control">
+              <view class="quantity-btn" @click="changeQuantity(-1)"><text>−</text></view>
+              <text class="quantity-value">{{ quantity }}</text>
+              <text class="quantity-unit">{{ unitLabel }}</text>
+              <view class="quantity-btn" @click="changeQuantity(1)"><text>+</text></view>
+            </view>
+            <text class="quantity-weight">≈ {{ totalWeight }}g</text>
+          </view>
+
+          <!-- 克数输入模式 -->
+          <view class="gram-row" v-else>
+            <input class="gram-input" type="number" v-model="weight" placeholder="100" />
+            <text class="gram-label">克</text>
           </view>
         </view>
-        
-        <view class="calc-preview">
-          <text>预计热量: {{ calculatedCalories }} 千卡</text>
+
+        <!-- 热量预览 -->
+        <view class="calorie-preview">
+          <text class="calorie-text">约 {{ calculatedCalories }} 千卡</text>
         </view>
-        
+
         <view class="popup-actions">
           <button class="confirm-btn ghost" @click="addToBatch">加入清单</button>
           <button class="confirm-btn" @click="confirmAdd">立即添加</button>
@@ -144,8 +149,14 @@ export default {
       // popup
       selectedFood: null,
       currentMealType: 'breakfast',
-      weight: 100,
-      selectedDish: '',
+      
+      // 智能单位
+      quantity: 1,
+      unitLabel: '份',
+      unitWeight: 100,
+      useGramMode: false,
+      weight: 100,  // 克数模式下使用
+      
       selectedItems: [],
       
       mealTypes: [
@@ -154,11 +165,11 @@ export default {
         { key: 'dinner', name: '晚餐' },
         { key: 'snack', name: '加餐' }
       ],
-      dishSizes: [
-        { name: '一小碗', weight: 150 },
-        { name: '一碗', weight: 250 },
-        { name: '一盘', weight: 300 },
-        { name: '一大盘', weight: 450 }
+      mealTypesWithIcon: [
+        { key: 'breakfast', name: '早餐', icon: '🌅' },
+        { key: 'lunch', name: '午餐', icon: '☀️' },
+        { key: 'dinner', name: '晚餐', icon: '🌙' },
+        { key: 'snack', name: '加餐', icon: '🍪' }
       ]
     }
   },
@@ -170,6 +181,14 @@ export default {
       this.initialType = options.type;
       this.currentMealType = options.type;
     }
+    // 根据时间自动选择餐次
+    if (!options.type) {
+      const hour = new Date().getHours();
+      if (hour < 10) this.currentMealType = 'breakfast';
+      else if (hour < 14) this.currentMealType = 'lunch';
+      else if (hour < 20) this.currentMealType = 'dinner';
+      else this.currentMealType = 'snack';
+    }
     if (options.keyword) {
       this.keyword = decodeURIComponent(options.keyword);
       setTimeout(() => {
@@ -178,11 +197,15 @@ export default {
     }
   },
   computed: {
+    totalWeight() {
+      if (this.useGramMode) return Number(this.weight) || 0;
+      return Math.round(this.quantity * this.unitWeight);
+    },
     calculatedCalories() {
       if (!this.selectedFood) return 0;
       const calories = this.getFoodCalories(this.selectedFood);
-      const weight = Number(this.weight) || 0;
-      return ((calories * weight) / 100).toFixed(0);
+      const w = this.totalWeight;
+      return ((calories * w) / 100).toFixed(0);
     }
   },
   methods: {
@@ -206,16 +229,26 @@ export default {
       if (source === 'openfoodfacts') return 'source-off';
       return 'source-db';
     },
-    applyDishWeight(dish) {
-      this.selectedDish = dish.name;
-      this.weight = dish.weight;
+    toggleInputMode() {
+      this.useGramMode = !this.useGramMode;
+      if (this.useGramMode) {
+        // 切换到克数模式时，用当前计算的总重量填入
+        this.weight = this.totalWeight;
+      } else {
+        // 切换回智能单位时，根据克数重算数量
+        this.quantity = Math.max(1, Math.round(Number(this.weight) / this.unitWeight));
+      }
     },
-    buildMealPayload(item, weight) {
+    changeQuantity(delta) {
+      const next = this.quantity + delta;
+      if (next >= 1 && next <= 20) this.quantity = next;
+    },
+    buildMealPayload(item, weightGrams) {
       const base = {
         meal_date: this.targetDate,
         meal_type: item.meal_type || this.currentMealType,
         food_name: item.name,
-        unit_weight: parseFloat(weight),
+        unit_weight: parseFloat(weightGrams),
         image_url: item.image_url || null
       };
       const dataSource = item.data_source || 'database';
@@ -254,15 +287,21 @@ export default {
     },
     selectFood(item) {
       this.selectedFood = item;
-      this.weight = 100; // reset
-      this.selectedDish = '';
+      this.useGramMode = false;
+      // 使用后端返回的智能单位
+      this.unitLabel = item.default_unit || '份';
+      this.unitWeight = item.unit_weight || 100;
+      this.quantity = 1;
+      this.weight = this.unitWeight;
     },
     addToBatch() {
       if (!this.selectedFood) return;
       const key = `${this.selectedFood.name}-${this.selectedFood.id || 'temp'}`;
+      const w = this.totalWeight;
       const exists = this.selectedItems.find(item => item.key === key);
       if (exists) {
-        exists.weight = this.weight;
+        exists.quantity = this.quantity;
+        exists.totalWeight = w;
         uni.showToast({ title: '已更新清单', icon: 'none' });
       } else {
         this.selectedItems.push({
@@ -273,7 +312,10 @@ export default {
           data_source: this.selectedFood.data_source,
           is_temp: this.selectedFood.is_temp,
           image_url: this.selectedFood.image_url,
-          weight: this.weight,
+          quantity: this.quantity,
+          unitLabel: this.unitLabel,
+          totalWeight: w,
+          weight: w,
           meal_type: this.currentMealType
         });
         uni.showToast({ title: '已加入清单', icon: 'success' });
@@ -288,7 +330,7 @@ export default {
     },
     async confirmBatchAdd() {
       if (!this.selectedItems.length) return;
-      const items = this.selectedItems.map(item => this.buildMealPayload(item, item.weight));
+      const items = this.selectedItems.map(item => this.buildMealPayload(item, item.totalWeight));
       uni.showLoading({ title: '批量提交中' });
       try {
         const res = await uni.request({
@@ -321,8 +363,9 @@ export default {
       }
     },
     async confirmAdd() {
-      if (!this.weight || this.weight <= 0) {
-        uni.showToast({ title: '请输入有效重量', icon: 'none' });
+      const w = this.totalWeight;
+      if (!w || w <= 0) {
+        uni.showToast({ title: '请输入有效数量', icon: 'none' });
         return;
       }
 
@@ -335,7 +378,7 @@ export default {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${uni.getStorageSync('token')}`
           },
-          data: this.buildMealPayload(this.selectedFood, this.weight)
+          data: this.buildMealPayload(this.selectedFood, w)
         });
 
         if (res.data.code === 0) {
@@ -347,7 +390,6 @@ export default {
             uni.navigateBack();
           }, 1000);
         } else {
-          // 解析详细错误信息
           const errorMsg = this.parseErrorMessage(res.data, res.statusCode);
           uni.showToast({ title: errorMsg, icon: 'none', duration: 3000 });
         }
@@ -359,10 +401,8 @@ export default {
       }
     },
     parseErrorMessage(data, statusCode) {
-      // 处理 422 验证错误
       if (statusCode === 422) {
         if (data.detail && Array.isArray(data.detail)) {
-          // Pydantic 验证错误格式
           const firstError = data.detail[0];
           const field = firstError.loc ? firstError.loc[firstError.loc.length - 1] : '未知字段';
           const fieldNames = {
@@ -378,11 +418,8 @@ export default {
         }
         return '数据格式错误，请检查输入';
       }
-
-      // 处理其他错误
       if (data.message) return data.message;
       if (data.detail) return typeof data.detail === 'string' ? data.detail : '请求处理失败';
-
       return '添加失败，请稍后重试';
     }
   }
@@ -481,30 +518,11 @@ export default {
   color: #666;
 }
 
-.source-ai {
-  background: #EEF2FF;
-  color: #4F46E5;
-}
-
-.source-baidu {
-  background: #FFF7ED;
-  color: #EA580C;
-}
-
-.source-user {
-  background: #ECFDF3;
-  color: #16A34A;
-}
-
-.source-db {
-  background: #F1F5F9;
-  color: #64748B;
-}
-
-.source-off {
-  background: #FEF3C7;
-  color: #D97706;
-}
+.source-ai { background: #EEF2FF; color: #4F46E5; }
+.source-baidu { background: #FFF7ED; color: #EA580C; }
+.source-user { background: #ECFDF3; color: #16A34A; }
+.source-db { background: #F1F5F9; color: #64748B; }
+.source-off { background: #FEF3C7; color: #D97706; }
 
 .add-icon {
   font-size: 20px;
@@ -518,6 +536,7 @@ export default {
   margin-top: 50px;
 }
 
+/* 清单面板 */
 .batch-panel {
   background: #fff;
   padding: 15px;
@@ -532,70 +551,30 @@ export default {
   margin-bottom: 10px;
 }
 
-.batch-title {
-  font-size: 14px;
-  font-weight: bold;
-}
+.batch-title { font-size: 14px; font-weight: bold; }
+.batch-clear { font-size: 12px; color: #999; }
 
-.batch-clear {
-  font-size: 12px;
-  color: #999;
-}
-
-.batch-meal-types {
-  margin-bottom: 10px;
-}
-
-.batch-label {
-  display: block;
-  font-size: 12px;
-  color: #666;
-  margin-bottom: 6px;
-}
+.batch-meal-types { margin-bottom: 10px; }
+.batch-label { display: block; font-size: 12px; color: #666; margin-bottom: 6px; }
 
 .batch-item {
   display: flex;
   align-items: center;
-  padding: 8px 0;
+  padding: 10px 0;
   border-bottom: 1px solid #f0f0f0;
 }
-
-.batch-item:last-child {
-  border-bottom: none;
-}
-
-.batch-name {
-  flex: 1;
-  font-size: 13px;
-}
+.batch-item:last-child { border-bottom: none; }
 
 .batch-main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-right: 8px;
+  gap: 4px;
 }
 
-.batch-meal-tags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.batch-weight {
-  width: 80px;
-  text-align: right;
-  background: #f9f9f9;
-  padding: 6px 8px;
-  border-radius: 6px;
-  margin-right: 8px;
-}
-
-.batch-remove {
-  font-size: 16px;
-  color: #ccc;
-}
+.batch-name { font-size: 14px; font-weight: 500; }
+.batch-sub { font-size: 12px; color: #999; }
+.batch-remove { font-size: 18px; color: #ccc; padding: 0 8px; }
 
 .batch-btn {
   margin-top: 10px;
@@ -604,7 +583,7 @@ export default {
   border-radius: 20px;
 }
 
-/* Popup */
+/* 弹窗 */
 .popup {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -620,31 +599,182 @@ export default {
   position: absolute;
   bottom: 0; left: 0; width: 100%;
   background-color: #fff;
-  border-top-left-radius: 12px;
-  border-top-right-radius: 12px;
-  padding: 20px;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  padding: 24px 20px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
 .popup-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 20px;
+  align-items: center;
 }
 
-.popup-header .title {
+.popup-title {
   font-size: 18px;
-  font-weight: bold;
+  font-weight: 600;
+  color: #333;
 }
 
-.form-item {
+.close {
+  font-size: 22px;
+  color: #999;
+  padding: 4px 8px;
+}
+
+.popup-food-name {
+  display: block;
+  font-size: 14px;
+  color: #999;
+  margin-top: 4px;
   margin-bottom: 20px;
 }
 
-.label {
+.popup-label {
   display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
   margin-bottom: 10px;
+}
+
+/* 餐次选择 */
+.meal-type-section { margin-bottom: 20px; }
+
+.meal-type-options {
+  display: flex;
+  gap: 10px;
+}
+
+.meal-type-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 0;
+  background: #F5F5F5;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+.meal-type-item.active {
+  background: #E8F5E9;
+  border-color: #4CAF50;
+}
+
+.mt-icon { font-size: 18px; }
+.mt-label { font-size: 12px; color: #666; }
+.meal-type-item.active .mt-label { color: #4CAF50; font-weight: 500; }
+
+/* 数量选择 */
+.quantity-section { margin-bottom: 16px; }
+
+.quantity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.unit-switch {
+  font-size: 12px;
+  color: #4CAF50;
+}
+
+.quantity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.quantity-control {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.quantity-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: #F5F5F5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #333;
+}
+
+.quantity-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: #333;
+  min-width: 30px;
+  text-align: center;
+}
+
+.quantity-unit {
+  font-size: 14px;
   color: #666;
+}
+
+.quantity-weight {
+  font-size: 13px;
+  color: #999;
+}
+
+.gram-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gram-input {
+  flex: 1;
+  background-color: #f9f9f9;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 16px;
+}
+
+.gram-label {
+  font-size: 14px;
+  color: #666;
+}
+
+/* 热量预览 */
+.calorie-preview {
+  text-align: right;
+  margin-bottom: 16px;
+}
+
+.calorie-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #4CAF50;
+}
+
+/* 底部按钮 */
+.popup-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.confirm-btn {
+  flex: 1;
+  background-color: #4CAF50;
+  color: #fff;
+  border-radius: 25px;
+  font-size: 14px;
+  padding: 10px 0;
+}
+
+.confirm-btn.ghost {
+  background-color: #fff;
+  color: #4CAF50;
+  border: 1px solid #4CAF50;
 }
 
 .tags {
@@ -662,37 +792,6 @@ export default {
 
 .tag.active {
   background-color: #E8F5E9;
-  color: #4CAF50;
-  border: 1px solid #4CAF50;
-}
-
-.weight-input {
-  background-color: #f9f9f9;
-  padding: 10px;
-  border-radius: 6px;
-  font-size: 16px;
-}
-
-.calc-preview {
-  margin-bottom: 20px;
-  text-align: right;
-  color: #ff9800;
-  font-size: 14px;
-}
-
-.confirm-btn {
-  background-color: #4CAF50;
-  color: #fff;
-  border-radius: 25px;
-}
-
-.popup-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.confirm-btn.ghost {
-  background-color: #fff;
   color: #4CAF50;
   border: 1px solid #4CAF50;
 }

@@ -54,7 +54,7 @@ class FoodTemp(Base):
     __tablename__ = "food_temp"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(100), unique=True, nullable=False, comment="食物名称")
+    name = Column(String(100), unique=True, index=True, nullable=False, comment="食物名称")
 
     calories = Column(Float, nullable=False, comment="热量 kcal/100g")
     protein = Column(Float, nullable=False, comment="蛋白质 g/100g")

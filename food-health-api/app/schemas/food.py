@@ -47,6 +47,10 @@ class FoodResponse(FoodBase):
     serving_desc: Optional[str] = None
     serving_weight: int = 100
 
+    # 智能单位（前端用于统一展示）
+    default_unit: str = Field(default="g", description="默认计量单位：g/个/碗/杯/片/份")
+    unit_weight: int = Field(default=100, description="每单位对应的克数")
+
     # 禁忌信息
     contraindications: List[ContraindicationInfo] = []
 

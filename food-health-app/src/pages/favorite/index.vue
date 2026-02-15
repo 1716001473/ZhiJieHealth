@@ -68,6 +68,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { API_BASE_URL } from '@/config.js'
+import { request } from '@/utils/http'
 import defaultImg from '@/static/logo.png'
 
 const list = ref<any[]>([])
@@ -82,24 +83,15 @@ onMounted(() => {
   loadFavorites()
 })
 
-const getToken = (): string => {
-  return uni.getStorageSync('token') || ''
-}
+
 
 const loadFavorites = async () => {
   loading.value = true
   page.value = 1
   try {
-    const token = getToken()
-    if (!token) {
-      uni.showToast({ title: '请先登录', icon: 'none' })
-      loading.value = false
-      return
-    }
-    const res = await uni.request({
+    const res = await request({
       url: `${API_BASE_URL}/api/v1/favorites?page=${page.value}&page_size=${pageSize}`,
       method: 'GET',
-      header: { Authorization: `Bearer ${token}` },
     })
     const data = res.data as any
     if (data.code === 0 && data.data) {
@@ -120,11 +112,9 @@ const loadMore = async () => {
   loadingMore.value = true
   page.value++
   try {
-    const token = getToken()
-    const res = await uni.request({
+    const res = await request({
       url: `${API_BASE_URL}/api/v1/favorites?page=${page.value}&page_size=${pageSize}`,
       method: 'GET',
-      header: { Authorization: `Bearer ${token}` },
     })
     const data = res.data as any
     if (data.code === 0 && data.data) {
@@ -146,11 +136,9 @@ const handleUnfavorite = async (item: any) => {
     success: async (res) => {
       if (!res.confirm) return
       try {
-        const token = getToken()
-        await uni.request({
+        await request({
           url: `${API_BASE_URL}/api/v1/favorites/${item.id}`,
           method: 'POST',
-          header: { Authorization: `Bearer ${token}` },
         })
         // 从列表中移除
         list.value = list.value.filter((i) => i.id !== item.id)

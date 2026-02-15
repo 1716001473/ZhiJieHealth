@@ -1,24 +1,28 @@
 <template>
   <view class="container">
-    <!-- 头部 -->
-    <view class="header">
-      <text class="back" @click="goBack">&lt;</text>
-      <text class="title">编辑资料</text>
-      <text class="placeholder"></text>
-    </view>
-
-    <!-- 头像区域 -->
-    <view class="avatar-section" @click="chooseAvatar">
-      <image
-        v-if="form.avatar_url"
-        class="avatar-img"
-        :src="getAvatarUrl(form.avatar_url)"
-        mode="aspectFill"
-      />
-      <view v-else class="avatar-placeholder">
-        <text class="avatar-text">{{ form.nickname?.[0] || '?' }}</text>
+    <view class="header-wrapper">
+      <!-- 头部导航 -->
+      <view class="nav-bar">
+        <view class="back" @click="goBack">
+          <view class="back-arrow"></view>
+        </view>
+        <text class="title">编辑资料</text>
+        <text class="placeholder"></text>
       </view>
-      <text class="avatar-tip">点击更换头像</text>
+
+      <!-- 头像区域 -->
+      <view class="avatar-section" @click="chooseAvatar">
+        <image
+          v-if="form.avatar_url"
+          class="avatar-img"
+          :src="getAvatarUrl(form.avatar_url)"
+          mode="aspectFill"
+        />
+        <view v-else class="avatar-placeholder">
+          <text class="avatar-text">{{ form.nickname?.[0] || '?' }}</text>
+        </view>
+        <text class="avatar-tip">点击更换头像</text>
+      </view>
     </view>
 
     <!-- 表单区域 -->
@@ -323,9 +327,17 @@ const saveProfile = async () => {
       }
     })
 
-    if (res.data?.code === 0) {
+    const responseData = res.data as any
+    
+    // 处理 FastAPI 错误返回 (如 400 Bad Request)
+    if (responseData?.detail) {
+      uni.showToast({ title: responseData.detail, icon: 'none' })
+      return
+    }
+
+    if (responseData?.code === 0) {
       // 更新本地存储
-      const updatedUser = { ...user.value, ...res.data.data }
+      const updatedUser = { ...user.value, ...responseData.data }
       uni.setStorageSync('user', updatedUser)
       user.value = updatedUser
 
@@ -334,7 +346,7 @@ const saveProfile = async () => {
         uni.navigateBack()
       }, 1000)
     } else {
-      uni.showToast({ title: res.data?.message || '保存失败', icon: 'none' })
+      uni.showToast({ title: responseData?.message || '保存失败', icon: 'none' })
     }
   } catch (e) {
     uni.showToast({ title: '保存失败', icon: 'none' })
@@ -350,22 +362,37 @@ const saveProfile = async () => {
   background: #f5f5f5;
 }
 
-.header {
+.header-wrapper {
+  background: linear-gradient(135deg, #4CAF50 0%, #81C784 100%);
+  padding-bottom: 50rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 4rpx 20rpx rgba(76, 175, 80, 0.2);
+}
+
+.nav-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 40rpx 30rpx 30rpx;
-  background: linear-gradient(135deg, #4CAF50 0%, #81C784 100%);
+  padding: 40rpx 30rpx 10rpx;
 }
 
 .back {
-  font-size: 40rpx;
-  color: #fff;
   padding: 10rpx 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-arrow {
+  width: 20rpx;
+  height: 20rpx;
+  border-left: 4rpx solid #fff;
+  border-bottom: 4rpx solid #fff;
+  transform: rotate(45deg);
 }
 
 .title {
-  font-size: 36rpx;
+  font-size: 34rpx;
   font-weight: bold;
   color: #fff;
 }
@@ -378,15 +405,14 @@ const saveProfile = async () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 50rpx 0;
-  background: #fff;
-  margin-bottom: 20rpx;
+  padding: 30rpx 0;
 }
 
 .avatar-img {
   width: 160rpx;
   height: 160rpx;
   border-radius: 50%;
+  border: 6rpx solid rgba(255, 255, 255, 0.3);
   background: #f0f0f0;
 }
 
@@ -394,7 +420,8 @@ const saveProfile = async () => {
   width: 160rpx;
   height: 160rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, #4CAF50 0%, #81C784 100%);
+  background: #fff;
+  border: 6rpx solid rgba(255, 255, 255, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -402,19 +429,21 @@ const saveProfile = async () => {
 
 .avatar-text {
   font-size: 60rpx;
-  color: #fff;
+  color: #4CAF50;
   font-weight: bold;
 }
 
 .avatar-tip {
   margin-top: 16rpx;
-  font-size: 26rpx;
-  color: #4CAF50;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .form-section {
   background: #fff;
-  margin-bottom: 20rpx;
+  margin: 0 20rpx 20rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
 }
 
 .form-item {
@@ -454,13 +483,16 @@ const saveProfile = async () => {
 }
 
 .section-title {
-  padding: 30rpx;
+  padding: 30rpx 40rpx 20rpx;
   font-size: 26rpx;
   color: #999;
 }
 
 .menu-section {
   background: #fff;
+  margin: 0 20rpx 20rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
 }
 
 .menu-item {

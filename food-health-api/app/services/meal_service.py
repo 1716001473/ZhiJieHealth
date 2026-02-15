@@ -42,10 +42,10 @@ class MealService:
                 }
             else:
                 per_100g = {
-                    "calories": food.calories,
-                    "protein": food.protein,
-                    "fat": food.fat,
-                    "carb": food.carbohydrate,
+                    "calories": food.calories or 0,
+                    "protein": food.protein or 0,
+                    "fat": food.fat or 0,
+                    "carb": food.carbohydrate or 0,
                 }
         else:
             # 纯自定义食物

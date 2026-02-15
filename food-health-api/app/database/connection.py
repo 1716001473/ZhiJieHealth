@@ -14,15 +14,32 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 # 创建数据库引擎
-# SQLite 需要设置 check_same_thread=False 以支持多线程
+# 根据数据库类型自动配置连接参数
 connect_args = {}
+engine_kwargs = {
+    "echo": settings.debug,  # 开发模式下打印 SQL
+}
+
 if settings.database_url.startswith("sqlite"):
+    # SQLite 需要设置 check_same_thread=False 以支持多线程
     connect_args["check_same_thread"] = False
+    logger.info("📦 数据库类型：SQLite（开发模式）")
+elif "mysql" in settings.database_url:
+    # MySQL 连接池配置
+    engine_kwargs.update({
+        "pool_size": 10,        # 连接池大小
+        "max_overflow": 20,     # 最大溢出连接数
+        "pool_recycle": 3600,   # 连接回收时间（秒）
+        "pool_pre_ping": True,  # 每次使用前检测连接是否有效
+    })
+    logger.info("🐬 数据库类型：MySQL（生产模式）")
+else:
+    logger.info(f"📦 数据库类型：{settings.database_url.split(':')[0]}")
 
 engine = create_engine(
     settings.database_url,
     connect_args=connect_args,
-    echo=settings.debug,  # 开发模式下打印 SQL
+    **engine_kwargs,
 )
 
 # 创建 Session 工厂

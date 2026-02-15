@@ -21,7 +21,7 @@
     <!-- Generate AI Plan Button (Empty State) -->
     <view class="empty-state" v-if="!isGenerating && !recommendedPlan">
       <!-- 临时使用默认图，稍后替换 -->
-      <image :src="logoImg" mode="aspectFit" class="empty-img" />
+      <image :src="'https://images.unsplash.com/photo-1543353071-873f17a7a088?q=80&w=800&auto=format&fit=crop'" mode="aspectFit" class="empty-img" />
       <text class="empty-text">还没有专属食谱</text>
       <button class="generate-btn main" @click="generateAIPlan()">
         <text class="btn-icon">🤖</text> 立即生成 AI 食谱
@@ -92,6 +92,7 @@ onShow(() => {
 })
 
 const getCurrentPlanContext = () => {
+  // 使用本地缓存的健康档案（由 health/index.vue 和 profile/index.vue 同步更新）
   const profile = uni.getStorageSync('healthProfile') || {}
   const user = uni.getStorageSync('user') || {}
   return { profile, user }
@@ -115,8 +116,9 @@ const loadRecommendedPlan = async () => {
         'Authorization': `Bearer ${uni.getStorageSync('token')}`
       }
     })
-    if (res.data.code === 0) {
-      recommendedPlan.value = res.data.data || null
+    const data = res.data as any
+    if (data.code === 0) {
+      recommendedPlan.value = data.data || null
     }
   } catch (e) {
     console.error('加载推荐食谱失败', e)
@@ -145,8 +147,9 @@ const generateAIPlan = async (force: boolean = false) => {
         disliked_tags: dislikedTags
       }
     })
-    if (res.data.code === 0) {
-      recommendedPlan.value = res.data.data
+    const data = res.data as any
+    if (data.code === 0) {
+      recommendedPlan.value = data.data
       uni.setStorageSync('planSignature', currentSignature.value)
       uni.setStorageSync('planNeedsUpdate', false)
       showUpdatePrompt.value = false
@@ -300,7 +303,7 @@ const goDetail = (id: number) => {
 
 /* AI Card */
 .ai-card {
-  height: 340rpx;
+  min-height: 340rpx;
   border-radius: 30rpx;
   overflow: hidden;
   position: relative;
@@ -321,10 +324,10 @@ const goDetail = (id: number) => {
 .ai-content {
   position: relative;
   height: 100%;
-  padding: 40rpx;
+  padding: 40rpx 40rpx 50rpx; /* 增加底部内间距 */
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: space-between; /* 上下分布 */
   z-index: 2;
 }
 
